@@ -126,15 +126,17 @@ export function useHabitLab() {
 
     const habitIsRecovery = habitToComplete.isRecoveryModeEnabled || recovery || globalRecoveryMode;
     
+    let totalEarnedPoints = 0;
+
     setHabits(prev => prev.map(h => {
       if (h.id === id) {
         const lastDate = h.completedDates.length > 0 ? new Date(h.completedDates[h.completedDates.length - 1]) : null;
         const currentDate = new Date(today);
         
         let isConsecutive = false;
-        const alreadyCompletedToday = h.completedDates.includes(today);
+        const alreadyCompletedToday = false; // We already returned early if it was completed
 
-        if (lastDate && !alreadyCompletedToday) {
+        if (lastDate) {
           // Normalize dates to midnight to calculate day difference accurately
           const d1 = new Date(lastDate);
           d1.setHours(0, 0, 0, 0);
@@ -155,74 +157,46 @@ export function useHabitLab() {
           }
         }
         
-        let newStreak = h.streak;
-        if (!alreadyCompletedToday) {
-           newStreak = isConsecutive ? h.streak + 1 : 1;
-           // However if it's the very first time doing the habit:
-           if (h.completedDates.length === 0) {
-             newStreak = 1;
-           }
+        let newStreak = isConsecutive ? h.streak + 1 : 1;
+        // However if it's the very first time doing the habit:
+        if (h.completedDates.length === 0) {
+          newStreak = 1;
         }
         
         // Calculate points according to explicit user rules
         let earnedPoints = 0;
         
-        if (!alreadyCompletedToday) {
-          let basePoints = 0;
+        let actionPoints = 0;
+        let timingPoints = 0;
+        let overExpectedPoints = 0;
+        
+        if (questionnaire?.isQuick) {
+          actionPoints = HABIT_SCORING_MAP.QUICK_LOG; // 10
+        } else {
+          actionPoints = HABIT_SCORING_MAP.NORMAL_COMMITMENT; // 10
           
-          if (questionnaire?.isQuick) {
-            basePoints = HABIT_SCORING_MAP.QUICK_LOG;
-          } else {
-            const goalLevel = questionnaire?.goalLevel || 'min';
-            if (goalLevel === 'exceeded') {
-              basePoints = HABIT_SCORING_MAP.HIGH_COMMITMENT_PERFECT_TIMING_OVER_EXPECTED;
-            } else if (goalLevel === 'expected') {
-              basePoints = HABIT_SCORING_MAP.HIGH_COMMITMENT_PERFECT_TIMING;
-            } else {
-              basePoints = HABIT_SCORING_MAP.NORMAL_COMMITMENT;
-            }
+          const hasPerfectTiming = questionnaire?.onTime || questionnaire?.onExpectedTime;
+          const isOverExpected = questionnaire?.goalLevel === 'exceeded';
+          
+          if (hasPerfectTiming) {
+            timingPoints = 10; // Making it reaching 20 for "HIGH_COMMITMENT+PERFECT_TIMING"
           }
           
-          // Total points for an action = (Action Points + Timing Points+over expected) * (IsRecoveryMode ? 2 : 1)
-          earnedPoints = basePoints * (habitIsRecovery ? 2 : 1);
-          
-          setPoints(p => p + earnedPoints);
+          if (isOverExpected) {
+            overExpectedPoints = 30; // Making it reaching 50 total if there's perfect timing too
+          }
         }
-
-        // Store for undo
-        setLastCompletion({
-          habitId: id,
-          pointsEarned: earnedPoints,
-          prevStreak: h.streak,
-          prevCompletedDates: h.completedDates,
-          prevNotes: h.notes,
-          prevWeeklyChallenge: weeklyChallenge,
-        });
-
-        if (earnedPoints > 0) {
-          setWeeklyChallenge(wp => {
-            if (!wp) return null;
-            const nextProgress = wp.progress + earnedPoints;
-            if (nextProgress >= wp.target) {
-              const nextLevel = wp.level + 1;
-              const newTarget = (100 * nextLevel); 
-              setTodayIsHoliday(true);
-              return {
-                level: nextLevel,
-                progress: 0,
-                target: newTarget,
-                goal: `اجمع ${newTarget} نقطة في المستوى الجديد`,
-                reward: `مكافأة المستوى ${nextLevel} 🎁`
-              };
-            }
-            return { ...wp, progress: nextProgress };
-          });
-        }
+        
+        // Total points for an action = (Action Points + Timing Points+over expected) * (IsRecoveryMode ? 2 : 1)
+        const basePoints = actionPoints + timingPoints + overExpectedPoints;
+        earnedPoints = basePoints * (habitIsRecovery ? 2 : 1);
+        
+        totalEarnedPoints = earnedPoints; // Capture to update outside
 
         return {
           ...h,
           streak: newStreak,
-          completedDates: alreadyCompletedToday ? h.completedDates : [...h.completedDates, today],
+          completedDates: [...h.completedDates, today],
           notes: (note || questionnaire) ? [...h.notes, { 
             date: today, 
             content: note || '', 
@@ -234,6 +208,38 @@ export function useHabitLab() {
       }
       return h;
     }));
+
+    if (totalEarnedPoints > 0) {
+      setPoints(p => p + totalEarnedPoints);
+
+      // Store for undo
+      setLastCompletion({
+        habitId: id,
+        pointsEarned: totalEarnedPoints,
+        prevStreak: habitToComplete.streak,
+        prevCompletedDates: habitToComplete.completedDates,
+        prevNotes: habitToComplete.notes,
+        prevWeeklyChallenge: weeklyChallenge,
+      });
+
+      setWeeklyChallenge(wp => {
+        if (!wp) return null;
+        const nextProgress = wp.progress + totalEarnedPoints;
+        if (nextProgress >= wp.target) {
+          const nextLevel = wp.level + 1;
+          const newTarget = (100 * nextLevel); 
+          setTodayIsHoliday(true);
+          return {
+            level: nextLevel,
+            progress: 0,
+            target: newTarget,
+            goal: `اجمع ${newTarget} نقطة في المستوى الجديد`,
+            reward: `مكافأة المستوى ${nextLevel} 🎁`
+          };
+        }
+        return { ...wp, progress: nextProgress };
+      });
+    }
   };
 
   return { 
