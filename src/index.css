@@ -1,0 +1,109 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-slate-900: #0f172a;
+  --color-emerald-500: #10b981;
+  --color-indigo-500: #6366f1;
+  --color-purple-500: #a855f7;
+  --color-pink-500: #ec4899;
+}
+
+@layer components {
+  /* Subtle interaction feedback for requested buttons (Settings Dropdown items) */
+  div#root header div.relative button:hover,
+  div#root header div.relative label:hover {
+    transform: scale(1.02) translateY(-1px);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  }
+
+  .glass-shine {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .glass-shine::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -100%;
+    width: 25%;
+    height: 200%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.3),
+      transparent
+    );
+    transform: rotate(30deg);
+    transition: none;
+    pointer-events: none;
+  }
+  
+  .glass-shine:hover::after {
+    left: 120%;
+    transition: left 0.7s cubic-bezier(0.19, 1, 0.22, 1);
+  }
+
+  .btn-hover-scale {
+    @apply transition-all duration-200 hover:scale-105 active:scale-95 shadow-md hover:shadow-lg;
+  }
+
+  @keyframes gradient-x {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .animate-gradient-x {
+    background-size: 200% 200%;
+    animation: gradient-x 3s ease infinite;
+  }
+}
+
+:root {
+  --tooltip-bg: #ffffff;
+  --tooltip-text: #0f172a;
+}
+
+.dark {
+  --tooltip-bg: #0f172a;
+  --tooltip-text: #f1f5f9;
+}
+
+body {
+  @apply antialiased tracking-tight font-sans transition-colors duration-500 bg-[#fafafa] dark:bg-slate-950 text-slate-900 dark:text-slate-100;
+}
+
+.glass {
+  @apply backdrop-blur-3xl bg-white/70 dark:bg-slate-900/70 border-slate-200/50 dark:border-slate-800/50 shadow-sm transition-all duration-300;
+}
+
+.timeline-line {
+  @apply absolute left-4 top-0 bottom-0 w-px bg-slate-100 dark:bg-slate-800;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

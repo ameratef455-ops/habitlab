@@ -1,0 +1,109 @@
+
+export enum HabitFrequency {
+  DAILY = 'daily',
+  WEEKLY = 'weekly',
+  MONTHLY = 'monthly',
+  CUSTOM = 'custom',
+  CUSTOM_DAYS = 'custom_days'
+}
+
+export interface Habit {
+  id: string;
+  name: string;
+  icon: string;
+  category: string;
+  frequency: HabitFrequency;
+  customFrequency?: string; 
+  order: string; 
+  time?: string;
+  duration?: string;
+  motivation?: string;
+  nearGoal: { target: number; frequency: string; description?: string };
+  awayGoal: { targetDate?: string; description?: string };
+  minGoal: string;
+  expectedGoal: string;
+  streak: number;
+  createdAt: string;
+  completedDates: string[];
+  color?: string;
+  celebrationIcon?: string;
+  replacingHabit?: string;
+  isRecoveryModeEnabled?: boolean;
+  notes: Array<{ 
+    date: string; 
+    content: string; 
+    type: 'text' | 'voice'; 
+    recovery: boolean;
+    onTime?: boolean;
+    onExpectedTime?: boolean;
+    actualTime?: string;
+    focus?: number; // 1-5
+    goalLevel?: 'min' | 'expected' | 'exceeded';
+  }>;
+}
+
+export interface WeeklyChallenge {
+  goal: string;
+  reward: string;
+  progress: number;
+  target: number;
+  level: number;
+}
+
+export type AppTheme = 'light' | 'dark';
+
+export const ICON_COLORS = [
+  'bg-slate-900',
+  'bg-indigo-500',
+  'bg-emerald-500',
+  'bg-rose-500',
+  'bg-amber-500',
+  'bg-purple-500',
+  'bg-cyan-500',
+  'bg-pink-500',
+];
+
+export const USER_RANKS = [
+  "بداية الرحلة 🌱",
+  "مُبتدئ متحمس ⚡",
+  "مُحارب العادات ⚔️",
+  "منضبط واعد 🛡️",
+  "خبير المسارات 🔱",
+  "سيد التركيز 👁️‍🗨️",
+  "أسطورة الالتزام 💎",
+  "مُهندس الدوبامين 🧠",
+  "كبير المُختبر 👔",
+  "سيادي كوني 🌌",
+  "مُسافر عبر الزمن ⏳",
+  "نور الانضباط 🌟",
+  "مهندس الواقع 🏗️",
+  "قائد التحول 🌀",
+  "كائن عاداتي فائق 🛸",
+  "مُبرمج العقل الباطن 🧠✨",
+  "سيد الأقدار 💠",
+  "كيان انضباطي مُطلق ♾️",
+  "حارس المعمل الأعظم 🏛️",
+  "أسطورة المعمل السرمدية 🏆"
+];
+
+export const CATEGORIES = [
+  'عام',
+  'رياضة',
+  'تعلم',
+  'نمو شخصي',
+  'صحة',
+  'عمل',
+  'ترفيه',
+  'مخصص'
+];
+
+export const CELEBRATION_ICONS = [
+  'PartyPopper',
+  'Sparkles',
+  'Trophy',
+  'Star',
+  'Rocket',
+  'Target',
+  'Gift',
+  'Medal'
+];

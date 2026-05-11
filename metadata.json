@@ -1,0 +1,13 @@
+{
+  "name": "Habit Lab",
+  "description": "A refined minimalist habit tracker with visual celebratory cues for nearing goals and progress analysis.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "Habit Tracking",
+    "Gamification",
+    "AI Motivation",
+    "Spiritual Retreat (Khalwa)"
+  ]
+}
