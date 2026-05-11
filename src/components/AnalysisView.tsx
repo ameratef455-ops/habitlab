@@ -104,15 +104,6 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
     return instances;
   }, [habits]);
 
-  const categoryData = useMemo(() => {
-    const cats: Record<string, number> = {};
-    habits.forEach((h) => {
-      const cat = h.category || "عام";
-      cats[cat] = (cats[cat] || 0) + 1;
-    });
-    return Object.entries(cats).map(([name, value]) => ({ name, value }));
-  }, [habits]);
-
   const achievementsByDay = useMemo(() => {
     const dailyLogs: Record<
       string,
@@ -134,22 +125,6 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
     return Object.values(dailyLogs).sort((a, b) =>
       b.date.localeCompare(a.date),
     );
-  }, [habits]);
-
-  const goalLevelStats = useMemo(() => {
-    const stats = { min: 0, expected: 0, exceeded: 0 };
-    habits.forEach((h) => {
-      h.notes?.forEach((n) => {
-        if (n.goalLevel === "min") stats.min++;
-        else if (n.goalLevel === "expected") stats.expected++;
-        else if (n.goalLevel === "exceeded") stats.exceeded++;
-      });
-    });
-    return [
-      { name: "الحد الأدنى", value: stats.min, color: "#f59e0b" },
-      { name: "المتوقع", value: stats.expected, color: "#6366f1" },
-      { name: "فاق التوقعات", value: stats.exceeded, color: "#10b981" },
-    ].filter((s) => s.value > 0);
   }, [habits]);
 
   const timeAdherenceStats = useMemo(() => {
@@ -398,54 +373,45 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
 
       {activeSubTab === "chart" && (
         <>
-          {/* Average Focus Score Panel */}
-          <div className="p-8 rounded-[2.5rem] bg-indigo-50 border border-indigo-100 dark:bg-indigo-900/10 dark:border-indigo-900/30 text-right flex flex-col justify-center shadow-inner">
-            <div className="flex items-center justify-between mb-4">
-              <Sparkles className="w-6 h-6 text-indigo-500" />
-              <h3 className="text-sm font-black uppercase tracking-widest text-indigo-400">
-                متوسط التركيز العام
-              </h3>
-            </div>
-            <div className="flex items-baseline justify-end gap-2">
-              <span className="text-5xl font-black text-indigo-600 dark:text-indigo-400">
-                {averageFocusScore}
-              </span>
-              <span className="text-sm font-bold text-indigo-400">/ 5.0</span>
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 text-right">
-            {/* Commitment Breakdown */}
-            <div className="p-8 rounded-[2.5rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50">
-              <div className="flex items-center justify-between mb-8 text-right">
-                <CheckCircle className="w-5 h-5 text-emerald-500" />
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                  سجل الالتزام بالمواعيد
-                </h3>
+            {/* Unified Focus and Commitment Panel */}
+            <div className="p-8 rounded-[2.5rem] bg-indigo-50 border border-indigo-100 text-right shadow-inner flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <Sparkles className="w-6 h-6 text-indigo-500" />
+                  <h3 className="text-sm font-black uppercase tracking-widest text-indigo-400">
+                    متوسط التركيز العام
+                  </h3>
+                </div>
+                <div className="flex items-baseline justify-end gap-2 mb-8">
+                  <span className="text-5xl font-black text-indigo-600">
+                    {averageFocusScore}
+                  </span>
+                  <span className="text-sm font-bold text-indigo-400">/ 5.0</span>
+                </div>
               </div>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl font-black text-slate-800 dark:text-slate-100">
-                    {detailedOnTimeInstances.length}
-                  </span>
-                  <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase">
-                    مرة التزمت بالمواعيد
-                  </span>
+
+              <div className="border-t border-indigo-100 pt-6">
+                <div className="flex items-center justify-between mb-4 text-right">
+                  <CheckCircle className="w-5 h-5 text-emerald-500" />
+                  <h3 className="text-xs font-black uppercase tracking-widest text-indigo-400">
+                    سجل الالتزام بالمواعيد ({detailedOnTimeInstances.length} مرة)
+                  </h3>
                 </div>
                 <div className="space-y-2 mt-4">
                   {detailedOnTimeInstances
                     .slice()
                     .reverse()
-                    .slice(0, 4)
+                    .slice(0, 3)
                     .map((inst, i) => (
                       <div
                         key={`ontime-v2-${inst.day}-${inst.habit}-${i}`}
-                        className="flex justify-between items-center bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-emerald-200 dark:hover:border-emerald-900 transition-colors"
+                        className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-indigo-100/50"
                       >
-                        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500">
+                        <span className="text-[9px] font-bold text-slate-400">
                           {inst.day}
                         </span>
-                        <span className="text-[10px] font-black text-indigo-500 dark:text-indigo-400">
+                        <span className="text-[10px] font-black text-indigo-500">
                           {inst.habit}
                         </span>
                       </div>
@@ -563,87 +529,6 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                     </div>
                   ))}
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Category Distribution Chart */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 text-right">
-            <div className="p-8 rounded-[2.5rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50">
-              <div className="flex items-center justify-between mb-8">
-                <PieIcon className="w-5 h-5 text-purple-500" />
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
-                  توزيع الفئات
-                </h3>
-              </div>
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={categoryData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {categoryData.map((entry, index) => (
-                        <Cell
-                          key={`cell-cat-v2-${index}`}
-                          fill={COLORS[index % COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: "1rem",
-                        border: "none",
-                        direction: "rtl",
-                      }}
-                    />
-                    <Legend verticalAlign="bottom" height={36} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="p-8 rounded-[2.5rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50">
-              <div className="flex items-center justify-between mb-8">
-                <Award className="w-5 h-5 text-amber-500" />
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
-                  توزيع مستويات الإنجاز
-                </h3>
-              </div>
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={goalLevelStats}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {goalLevelStats.map((entry, index) => (
-                        <Cell
-                          key={`cell-goal-v2-${index}`}
-                          fill={entry.color}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: "1rem",
-                        border: "none",
-                        direction: "rtl",
-                      }}
-                    />
-                    <Legend verticalAlign="bottom" height={36} />
-                  </PieChart>
-                </ResponsiveContainer>
               </div>
             </div>
           </div>

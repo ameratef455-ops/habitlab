@@ -55,9 +55,7 @@ export default function App() {
     completeHabit, 
     revertLastCompletion,
     todayIsHoliday,
-    setTodayIsHoliday,
-    theme,
-    setTheme
+    setTodayIsHoliday
   } = useHabitLab();
 
   const [loading, setLoading] = useState(true);
@@ -420,13 +418,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
-             <button 
-               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-               className="w-10 h-10 rounded-xl flex items-center justify-center transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 shadow-sm"
-               title="تبديل المظهر"
-             >
-               {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-             </button>
              <button 
                onClick={() => setGlobalRecoveryMode(!globalRecoveryMode)}
                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-md btn-hover-scale glass-shine ${globalRecoveryMode ? 'bg-amber-500 text-white shadow-amber-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 border border-slate-200 dark:border-slate-700'}`}

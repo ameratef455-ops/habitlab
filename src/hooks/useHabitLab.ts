@@ -24,11 +24,6 @@ export function useHabitLab() {
     return saved ? parseInt(saved) : 0;
   });
 
-  const [theme, setTheme] = useState<AppTheme>(() => {
-    const saved = localStorage.getItem('theme');
-    return (saved as AppTheme) || 'light';
-  });
-
   const [lastCompletion, setLastCompletion] = useState<{
     habitId: string;
     pointsEarned: number;
@@ -49,16 +44,7 @@ export function useHabitLab() {
       localStorage.removeItem('weeklyChallenge');
     }
     localStorage.setItem('userPoints', points.toString());
-    localStorage.setItem('theme', theme);
-    
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.classList.add('light');
-    }
-  }, [habits, weeklyChallenge, points, theme]);
+  }, [habits, weeklyChallenge, points]);
 
   const addHabit = (habit: Omit<Habit, 'id' | 'streak' | 'completedDates' | 'notes'>) => {
     const newHabit: Habit = {
@@ -256,8 +242,6 @@ export function useHabitLab() {
     completeHabit, 
     revertLastCompletion,
     todayIsHoliday,
-    setTodayIsHoliday,
-    theme,
-    setTheme
+    setTodayIsHoliday
   };
 }
