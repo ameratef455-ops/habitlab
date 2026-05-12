@@ -39,6 +39,7 @@ import { AnalysisView } from './components/AnalysisView';
 import { SplashScreen } from './components/SplashScreen';
 import { CelebrationConfetti } from './components/CelebrationConfetti';
 import { TutorialOverlay } from './components/TutorialOverlay';
+import { EngineeringTips } from './components/EngineeringTips';
 import { useGoogleDriveSync } from './hooks/useGoogleDriveSync';
 import { Habit, AppTheme, CATEGORIES, USER_RANKS } from './types';
 import { trackHabitCompletion } from './services/analytics';
@@ -67,7 +68,7 @@ export default function App() {
     overrideData(remoteData.habits || [], remoteData.points || 0, remoteData.weeklyChallenge || null);
   };
 
-  const { syncStatus, isSignedIn, signIn, logout, isInitializing } = useGoogleDriveSync(
+  const { syncStatus, isSignedIn, signIn, logout, deleteSyncData, isInitializing } = useGoogleDriveSync(
     { habits, points, weeklyChallenge },
     handleRemoteDataSync
   );
@@ -236,28 +237,41 @@ export default function App() {
       doc.setDrawColor(226, 232, 240); // slate-200
       doc.setLineWidth(0.5);
       
+      const cardWidth = (width - 60) / 3;
+
       // Card 1
-      doc.roundedRect(20, 75, (width - 50)/2, 35, 3, 3, 'FD');
-      doc.setFontSize(11);
+      doc.roundedRect(20, 75, cardWidth, 35, 3, 3, 'FD');
+      doc.setFontSize(9);
       doc.setTextColor(100, 116, 139); // slate-500
       doc.setFont("helvetica", "normal");
       doc.text('Current Level', 25, 87);
       doc.setTextColor(15, 23, 42); // slate-900
-      doc.setFontSize(18);
+      doc.setFontSize(16);
       doc.setFont("helvetica", "bold");
-      // userTitle might be arabic, we will only show LEVEL
       doc.text(`Level ${userLevel}`, 25, 100);
 
       // Card 2
-      doc.roundedRect(20 + (width - 50)/2 + 10, 75, (width - 50)/2, 35, 3, 3, 'FD');
-      doc.setFontSize(11);
+      doc.roundedRect(20 + cardWidth + 10, 75, cardWidth, 35, 3, 3, 'FD');
+      doc.setFontSize(9);
       doc.setTextColor(100, 116, 139); // slate-500
       doc.setFont("helvetica", "normal");
-      doc.text('Total Points', 20 + (width - 50)/2 + 15, 87);
+      doc.text('Total Points', 20 + cardWidth + 15, 87);
       doc.setTextColor(15, 23, 42); // slate-900
-      doc.setFontSize(18);
+      doc.setFontSize(16);
       doc.setFont("helvetica", "bold");
-      doc.text(`${points}`, 20 + (width - 50)/2 + 15, 100);
+      doc.text(`${points}`, 20 + cardWidth + 15, 100);
+
+      // Card 3
+      const totalCompletions = habits.reduce((acc, h) => acc + (h.totalCompletions || 0), 0);
+      doc.roundedRect(20 + (cardWidth * 2) + 20, 75, cardWidth, 35, 3, 3, 'FD');
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139); // slate-500
+      doc.setFont("helvetica", "normal");
+      doc.text('Total Check-ins', 20 + (cardWidth * 2) + 25, 87);
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${totalCompletions}`, 20 + (cardWidth * 2) + 25, 100);
 
       doc.setFontSize(18);
       doc.text('Active Habits', 20, 130);
@@ -323,18 +337,24 @@ export default function App() {
       deferredPrompt.prompt();
       deferredPrompt.userChoice.then((choiceResult: any) => {
         if (choiceResult.outcome === 'accepted') {
-          showFeedback('مبارك! تم تثبيت تطبيق معمل العادات 🚀');
+          showFeedback('مبارك! تم تثبيت تطبيق معمل العادات 🚀', 'success');
         }
         setDeferredPrompt(null);
       });
     } else {
-      showFeedback('التطبيق مثبت بالفعل أو المتصفح لا يدعم التثبيت حالياً.', 'info');
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+      if (isIOS) {
+         showFeedback('لتثبيت التطبيق على آيفون: اضغط على زر المشاركة ثم "Add to Home Screen" 📱', 'info');
+      } else {
+         showFeedback('لتثبيت التطبيق، اختر "Install" أو "Add to Home screen" من قائمة المتصفح الخاص بك 📱', 'info');
+      }
     }
   };
 
   const [showSupport, setShowSupport] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showTips, setShowTips] = useState(false);
 
   useEffect(() => {
     const hasSeenTutorial = localStorage.getItem('hasSeenTutorial');
@@ -562,6 +582,17 @@ export default function App() {
                <div className="space-y-3">
                  <button 
                    onClick={() => {
+                     setShowTips(true);
+                     setShowSettings(false);
+                   }} 
+                   className="w-full flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-100 hover:bg-blue-100 transition-colors group"
+                 >
+                   <span className="text-sm font-black text-blue-600">نصائح المخطط الهندسي</span>
+                   <span className="text-xl group-hover:scale-110 transition-transform">🧠</span>
+                 </button>
+
+                 <button 
+                   onClick={() => {
                      setShowSupport(true);
                      setShowSettings(false);
                    }} 
@@ -600,30 +631,47 @@ export default function App() {
                    <span className="text-xl group-hover:scale-110 transition-transform">📄</span>
                  </button>
 
-                 {deferredPrompt && (
-                   <button 
-                     onClick={() => {
-                       installPWA();
-                       setShowSettings(false);
-                     }} 
-                     className="w-full flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 hover:bg-emerald-100 transition-colors group"
-                   >
-                     <span className="text-sm font-black text-emerald-600">تثبيت التطبيق 📱</span>
-                     <Cloud className="w-5 h-5 text-emerald-500 group-hover:scale-110 transition-transform" />
-                   </button>
-                 )}
+                 <button 
+                   onClick={() => {
+                     installPWA();
+                     setShowSettings(false);
+                   }} 
+                   className="w-full flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 hover:bg-emerald-100 transition-colors group"
+                 >
+                   <span className="text-sm font-black text-emerald-600">تثبيت التطبيق 📱</span>
+                   <Cloud className="w-5 h-5 text-emerald-500 group-hover:scale-110 transition-transform" />
+                 </button>
 
                  {isSignedIn && (
-                   <button 
-                     onClick={() => {
-                       logout();
-                       setShowSettings(false);
-                     }} 
-                     className="w-full flex items-center justify-between p-4 bg-rose-50 dark:bg-rose-900/20 rounded-2xl border border-rose-100 hover:bg-rose-100 transition-colors group mt-4!"
-                   >
-                     <span className="text-sm font-black text-rose-600">تسجيل الخروج من المزامنة</span>
-                     <CloudOff className="w-5 h-5 text-rose-500 group-hover:scale-110 transition-transform" />
-                   </button>
+                   <div className="flex flex-col gap-2 mt-4">
+                     <button 
+                       onClick={() => {
+                         logout();
+                         setShowSettings(false);
+                       }} 
+                       className="w-full flex items-center justify-between p-4 bg-rose-50 dark:bg-rose-900/20 rounded-2xl border border-rose-100 hover:bg-rose-100 transition-colors group"
+                     >
+                       <span className="text-sm font-black text-rose-600">تسجيل الخروج من المزامنة</span>
+                       <CloudOff className="w-5 h-5 text-rose-500 group-hover:scale-110 transition-transform" />
+                     </button>
+                     <button 
+                       onClick={async () => {
+                         if (window.confirm('هل أنت متأكد من حذف بياناتك من جوجل درايف؟ لا يمكن التراجع عن هذه الخطوة.')) {
+                            const success = await deleteSyncData();
+                            if (success) {
+                               showFeedback('تم حذف بيانات المزامنة بنجاح', 'success');
+                            } else {
+                               showFeedback('حدث خطأ أثناء حذف بيانات المزامنة', 'alert');
+                            }
+                            setShowSettings(false);
+                         }
+                       }} 
+                       className="w-full flex items-center justify-between p-4 bg-red-100 dark:bg-red-900/30 rounded-2xl border border-red-200 hover:bg-red-200 transition-colors group"
+                     >
+                       <span className="text-sm font-black text-red-700">حذف بيانات المزامنة</span>
+                       <span className="text-xl group-hover:scale-110 transition-transform">🗑️</span>
+                     </button>
+                   </div>
                  )}
                </div>
             </motion.div>
@@ -1171,6 +1219,9 @@ export default function App() {
             onSave={handleSave}
             habitToEdit={habitToEdit}
           />
+        )}
+        {showTips && (
+          <EngineeringTips onClose={() => setShowTips(false)} />
         )}
       </AnimatePresence>
     </div>

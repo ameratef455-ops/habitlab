@@ -208,6 +208,46 @@ export function useGoogleDriveSync(
     }
   };
 
+  const deleteSyncData = async () => {
+    if (!gapi?.client?.getToken()) return;
+
+    if (fileIdRef.current) {
+       try {
+           setSyncStatus('Syncing...');
+           await gapi.client.drive.files.delete({ fileId: fileIdRef.current });
+           fileIdRef.current = null;
+           setSyncStatus('Offline');
+           logout(); 
+           return true;
+       } catch (err) {
+           console.error("Failed to delete sync data", err);
+           setSyncStatus('Error');
+           return false;
+       }
+    } else {
+       // If no fileId but we're signed in and want to delete the file, try search then delete
+       try {
+          const response = await gapi.client.drive.files.list({
+             q: `name='${FILENAME}' and trashed=false`,
+             spaces: 'drive',
+             fields: 'files(id)',
+          });
+          const files = response.result.files;
+          if (files && files.length > 0) {
+             await gapi.client.drive.files.delete({ fileId: files[0].id! });
+          }
+          fileIdRef.current = null;
+          setSyncStatus('Offline');
+          logout();
+          return true;
+       } catch (err) {
+           console.error("Failed to search and delete sync data", err);
+           setSyncStatus('Error');
+           return false;
+       }
+    }
+  };
+
   // Debounced uploading
   useEffect(() => {
     // Skip on first mount / before first load from remote
@@ -229,5 +269,5 @@ export function useGoogleDriveSync(
     };
   }, [JSON.stringify(currentData), isSignedIn]); // Depend on stringified data to check actual changes
 
-  return { syncStatus, isSignedIn, signIn, logout, isInitializing };
+  return { syncStatus, isSignedIn, signIn, logout, deleteSyncData, isInitializing };
 }
