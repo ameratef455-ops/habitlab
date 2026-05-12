@@ -194,7 +194,7 @@ export function useGoogleDriveSync(
          clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [currentData]); // Depend on actual data to check changes
+  }, [JSON.stringify(currentData), isSignedIn]); // Depend on stringified data to check actual changes
 
   return { syncStatus, isSignedIn, signIn, isInitializing };
 }
