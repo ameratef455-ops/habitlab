@@ -67,7 +67,7 @@ export default function App() {
     overrideData(remoteData.habits || [], remoteData.points || 0, remoteData.weeklyChallenge || null);
   };
 
-  const { syncStatus, isSignedIn, signIn, isInitializing } = useGoogleDriveSync(
+  const { syncStatus, isSignedIn, signIn, logout, isInitializing } = useGoogleDriveSync(
     { habits, points, weeklyChallenge },
     handleRemoteDataSync
   );
@@ -266,7 +266,7 @@ export default function App() {
       habits.forEach((h, index) => {
         if (index % 2 === 0) {
           doc.setFillColor(248, 250, 252);
-          doc.rect(20, y - 7, width - 40, 14, 'F');
+          doc.rect(20, y - 7, width - 40, 18, 'F');
         }
         
         doc.setFontSize(12);
@@ -278,7 +278,12 @@ export default function App() {
         doc.setTextColor(99, 102, 241); // indigo-500
         doc.text(`${h.streak} Day Streak`, width - 25, y, { align: 'right' });
         
-        y += 14;
+        doc.setFontSize(9);
+        doc.setTextColor(100, 116, 139);
+        const diff = h.difficulty === 'easy' ? 'Easy' : h.difficulty === 'medium' ? 'Medium' : 'Hard';
+        doc.text(`Category: ${h.category} | Difficulty: ${diff} | Total Completions: ${h.totalCompletions || 0}`, 25, y + 6);
+
+        y += 18;
         if (y > 270) {
           doc.addPage();
           y = 30;
@@ -293,12 +298,24 @@ export default function App() {
     }
   };
 
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>((window as any).deferredPrompt || null);
   useEffect(() => {
-    window.addEventListener('beforeinstallprompt', (e) => {
+    const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-    });
+      (window as any).deferredPrompt = e;
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    
+    // Check if it's already installed
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    if (isStandalone) {
+       setDeferredPrompt(null);
+    } else if ((window as any).deferredPrompt) {
+       setDeferredPrompt((window as any).deferredPrompt);
+    }
+    
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
   const installPWA = () => {
@@ -593,6 +610,19 @@ export default function App() {
                    >
                      <span className="text-sm font-black text-emerald-600">تثبيت التطبيق 📱</span>
                      <Cloud className="w-5 h-5 text-emerald-500 group-hover:scale-110 transition-transform" />
+                   </button>
+                 )}
+
+                 {isSignedIn && (
+                   <button 
+                     onClick={() => {
+                       logout();
+                       setShowSettings(false);
+                     }} 
+                     className="w-full flex items-center justify-between p-4 bg-rose-50 dark:bg-rose-900/20 rounded-2xl border border-rose-100 hover:bg-rose-100 transition-colors group mt-4!"
+                   >
+                     <span className="text-sm font-black text-rose-600">تسجيل الخروج من المزامنة</span>
+                     <CloudOff className="w-5 h-5 text-rose-500 group-hover:scale-110 transition-transform" />
                    </button>
                  )}
                </div>

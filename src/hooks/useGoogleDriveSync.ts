@@ -52,42 +52,21 @@ export function useGoogleDriveSync(
 
   const handleAuthResult = useCallback(async (tokenResponse: google.accounts.oauth2.TokenResponse) => {
     if (tokenResponse && tokenResponse.access_token) {
+      localStorage.setItem('gapi_access_token', tokenResponse.access_token);
+      localStorage.setItem('gapi_token_expires_at', (Date.now() + Number(tokenResponse.expires_in) * 1000).toString());
+      localStorage.setItem('gapi_is_auto_sync_enabled', 'true');
+      
       setIsSignedIn(true);
-      await syncDriveFile();
-    }
-  }, []);
-
-  useEffect(() => {
-    // Wait for scripts to load
-    const checkScripts = setInterval(() => {
-      if (window.gapi && window.google) {
-        clearInterval(checkScripts);
-        
-        loadGapiClient().then(() => {
-          tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: SCOPES,
-            callback: handleAuthResult,
-          });
-          setIsInitializing(false);
-        }).catch((e) => {
-          console.error("Failed to initialize GAPI client", e);
-          setSyncStatus('Error');
-          setIsInitializing(false);
-        });
+      if (typeof gapi !== 'undefined' && gapi.client) {
+         gapi.client.setToken({ access_token: tokenResponse.access_token });
       }
-    }, 100);
-
-    return () => clearInterval(checkScripts);
-  }, [loadGapiClient, handleAuthResult]);
-
-  const signIn = useCallback(() => {
-    if (tokenClientRef.current) {
-      tokenClientRef.current.requestAccessToken();
+      setTimeout(() => {
+        syncDriveFileSync();
+      }, 500); // Wait briefly for state
     }
   }, []);
 
-  const syncDriveFile = async () => {
+  const syncDriveFileSync = async () => {
     if (!gapi.client.getToken()) return;
     
     setSyncStatus('Syncing...');
@@ -100,7 +79,6 @@ export function useGoogleDriveSync(
 
       const files = response.result.files;
       if (files && files.length > 0) {
-        // File exists, download it
         const file = files[0];
         fileIdRef.current = file.id!;
         
@@ -115,9 +93,7 @@ export function useGoogleDriveSync(
            onRemoteDataUpdate(remoteData);
            lastUploadedTimestampRef.current = remoteData.timestamp || Date.now();
         }
-        
       } else {
-        // Create initial file
         await uploadToDrive(true);
       }
       setSyncStatus('Synced');
@@ -127,6 +103,63 @@ export function useGoogleDriveSync(
       setSyncStatus('Error');
     }
   };
+
+  useEffect(() => {
+    const checkScripts = setInterval(() => {
+      if (window.gapi && window.google) {
+        clearInterval(checkScripts);
+        
+        loadGapiClient().then(() => {
+          tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: handleAuthResult,
+          });
+
+          // Check cached token
+          const cachedToken = localStorage.getItem('gapi_access_token');
+          const expiresAt = localStorage.getItem('gapi_token_expires_at');
+          const isAutoSync = localStorage.getItem('gapi_is_auto_sync_enabled');
+
+          if (cachedToken && expiresAt && Date.now() < Number(expiresAt)) {
+             gapi.client.setToken({ access_token: cachedToken });
+             setIsSignedIn(true);
+             syncDriveFileSync().then(() => setIsInitializing(false));
+          } else if (isAutoSync === 'true') {
+             // Token expired, use Silent Prompt to re-auth without popup
+             tokenClientRef.current.requestAccessToken({ prompt: '' });
+             setIsInitializing(false);
+          } else {
+             setIsInitializing(false);
+          }
+        }).catch((e) => {
+          console.error("Failed to initialize GAPI client", e);
+          setSyncStatus('Error');
+          setIsInitializing(false);
+        });
+      }
+    }, 100);
+
+    return () => clearInterval(checkScripts);
+  }, [loadGapiClient, handleAuthResult]);
+
+  const signIn = useCallback(() => {
+    if (tokenClientRef.current) {
+      tokenClientRef.current.requestAccessToken({ prompt: 'consent' });
+    }
+  }, []);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('gapi_access_token');
+    localStorage.removeItem('gapi_token_expires_at');
+    localStorage.removeItem('gapi_is_auto_sync_enabled');
+    setIsSignedIn(false);
+    setSyncStatus('Offline');
+    if (gapi.client.getToken() !== null) {
+      google.accounts.oauth2.revoke(gapi.client.getToken().access_token, () => {});
+      gapi.client.setToken(null);
+    }
+  }, []);
 
   const uploadToDrive = async (isNew = false) => {
     if (!gapi.client.getToken()) return;
@@ -196,5 +229,5 @@ export function useGoogleDriveSync(
     };
   }, [JSON.stringify(currentData), isSignedIn]); // Depend on stringified data to check actual changes
 
-  return { syncStatus, isSignedIn, signIn, isInitializing };
+  return { syncStatus, isSignedIn, signIn, logout, isInitializing };
 }
