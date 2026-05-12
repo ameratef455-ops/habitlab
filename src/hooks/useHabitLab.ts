@@ -228,6 +228,12 @@ export function useHabitLab() {
     }
   };
 
+  const overrideData = (newHabits: Habit[], newPoints: number, newWeeklyChallenge: WeeklyChallenge | null) => {
+    setHabits(newHabits);
+    setPoints(newPoints);
+    setWeeklyChallenge(newWeeklyChallenge);
+  };
+
   return { 
     habits, 
     weeklyChallenge,
@@ -242,6 +248,7 @@ export function useHabitLab() {
     completeHabit, 
     revertLastCompletion,
     todayIsHoliday,
-    setTodayIsHoliday
+    setTodayIsHoliday,
+    overrideData
   };
 }

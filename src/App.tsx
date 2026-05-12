@@ -27,7 +27,10 @@ import {
   Moon,
   Sun,
   Search,
-  ChevronRight as ChevronRightIcon
+  ChevronRight as ChevronRightIcon,
+  Cloud,
+  CloudOff,
+  RefreshCw
 } from 'lucide-react';
 import { useHabitLab } from './hooks/useHabitLab';
 import { HabitCard } from './components/HabitCard';
@@ -36,6 +39,7 @@ import { AnalysisView } from './components/AnalysisView';
 import { SplashScreen } from './components/SplashScreen';
 import { CelebrationConfetti } from './components/CelebrationConfetti';
 import { TutorialOverlay } from './components/TutorialOverlay';
+import { useGoogleDriveSync } from './hooks/useGoogleDriveSync';
 import { Habit, AppTheme, CATEGORIES, USER_RANKS } from './types';
 import { trackHabitCompletion } from './services/analytics';
 import { getMotivationalMessage, getProgressSummary } from './services/geminiService';
@@ -55,8 +59,18 @@ export default function App() {
     completeHabit, 
     revertLastCompletion,
     todayIsHoliday,
-    setTodayIsHoliday
+    setTodayIsHoliday,
+    overrideData
   } = useHabitLab();
+
+  const handleRemoteDataSync = (remoteData: any) => {
+    overrideData(remoteData.habits || [], remoteData.points || 0, remoteData.weeklyChallenge || null);
+  };
+
+  const { syncStatus, isSignedIn, signIn, isInitializing } = useGoogleDriveSync(
+    { habits, points, weeklyChallenge },
+    handleRemoteDataSync
+  );
 
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -191,30 +205,88 @@ export default function App() {
 
   const generatePDF = async () => {
     try {
+      showFeedback('جار تجهيز التقرير... ⏳', 'info');
       const { jsPDF } = await import('jspdf');
       const doc = new jsPDF();
-      doc.setFontSize(22);
-      doc.text('Habit Lab Report', 20, 20);
-      doc.setFontSize(14);
-      doc.text(`Level: ${userLevel} (${userTitle})`, 20, 35);
-      doc.text(`Total Points: ${points}`, 20, 45);
-      doc.text(`Total Habits: ${habits.length}`, 20, 55);
       
-      let y = 70;
-      doc.text('Current Habits:', 20, y);
-      y += 10;
-      habits.forEach(h => {
-        doc.setFontSize(10);
-        doc.text(`- ${h.name}: Streak ${h.streak} days, Cat: ${h.category}`, 25, y);
-        y += 7;
+      const width = doc.internal.pageSize.getWidth();
+      
+      // Header Background
+      doc.setFillColor(99, 102, 241); // indigo-500
+      doc.rect(0, 0, width, 45, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(26);
+      doc.setFont("helvetica", "bold");
+      doc.text('Habit Lab Report', 20, 28);
+      
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "normal");
+      const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      doc.text(dateStr, width - 20, 28, { align: 'right' });
+
+      // Body 
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text('Summary', 20, 65);
+      
+      // Stats Cards
+      doc.setFillColor(248, 250, 252); // slate-50
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.setLineWidth(0.5);
+      
+      // Card 1
+      doc.roundedRect(20, 75, (width - 50)/2, 35, 3, 3, 'FD');
+      doc.setFontSize(11);
+      doc.setTextColor(100, 116, 139); // slate-500
+      doc.setFont("helvetica", "normal");
+      doc.text('Current Level', 25, 87);
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      // userTitle might be arabic, we will only show LEVEL
+      doc.text(`Level ${userLevel}`, 25, 100);
+
+      // Card 2
+      doc.roundedRect(20 + (width - 50)/2 + 10, 75, (width - 50)/2, 35, 3, 3, 'FD');
+      doc.setFontSize(11);
+      doc.setTextColor(100, 116, 139); // slate-500
+      doc.setFont("helvetica", "normal");
+      doc.text('Total Points', 20 + (width - 50)/2 + 15, 87);
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${points}`, 20 + (width - 50)/2 + 15, 100);
+
+      doc.setFontSize(18);
+      doc.text('Active Habits', 20, 130);
+      
+      let y = 145;
+      habits.forEach((h, index) => {
+        if (index % 2 === 0) {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(20, y - 7, width - 40, 14, 'F');
+        }
+        
+        doc.setFontSize(12);
+        doc.setTextColor(15, 23, 42);
+        // Using encodeURIComponent / decodeURIComponent to attempt supporting raw string gracefully if it has unicode
+        doc.text(`Habit: ${h.name.substring(0, 30)}`, 25, y);
+        
+        doc.setFontSize(11);
+        doc.setTextColor(99, 102, 241); // indigo-500
+        doc.text(`${h.streak} Day Streak`, width - 25, y, { align: 'right' });
+        
+        y += 14;
         if (y > 270) {
           doc.addPage();
-          y = 20;
+          y = 30;
         }
       });
       
       doc.save(`HabitLab_Report_${new Date().toISOString().split('T')[0]}.pdf`);
-      showFeedback('PDF Report Generated Successfully!', 'success');
+      showFeedback('تم استخراج التقرير بنجاح! 🚀', 'success');
     } catch (err) {
       console.error(err);
       showFeedback('Error generating PDF', 'alert');
@@ -371,7 +443,7 @@ export default function App() {
       </AnimatePresence>
       
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/70 dark:bg-slate-950/70 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800/50 h-16 flex items-center">
-        <div className="max-w-2xl mx-auto w-full px-10 sm:px-14 flex items-center justify-between">
+        <div className="max-w-2xl mx-auto w-full px-4 sm:px-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
              {activeTab !== 'habits' ? (
                 <button 
@@ -389,10 +461,20 @@ export default function App() {
              )}
              <div className="text-right hidden sm:block">
                 <h1 className="text-xs font-black tracking-tight text-slate-800 uppercase">Habit Lab</h1>
-                <div className="flex items-center gap-1.5 justify-end">
-                  <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
-                  <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">Active Lab</p>
-                </div>
+                {!isSignedIn ? (
+                   <button onClick={signIn} className="flex items-center gap-1.5 justify-end group mt-1">
+                      <CloudOff className="w-3 h-3 text-slate-400 group-hover:text-indigo-500 transition-colors" />
+                      <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest group-hover:text-indigo-500 transition-colors">Sign in to Sync</span>
+                   </button>
+                ) : (
+                   <div className="flex items-center gap-1.5 justify-end mt-1">
+                     {syncStatus === 'Syncing...' && <RefreshCw className="w-3 h-3 text-indigo-500 animate-spin" />}
+                     {syncStatus === 'Synced' && <Cloud className="w-3 h-3 text-emerald-500" />}
+                     {syncStatus === 'Error' && <AlertCircle className="w-3 h-3 text-rose-500" />}
+                     {syncStatus === 'Offline' && <CloudOff className="w-3 h-3 text-slate-400" />}
+                     <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">{syncStatus}</p>
+                   </div>
+                )}
              </div>
           </div>
           
@@ -401,7 +483,7 @@ export default function App() {
                <button 
                  key={`header-tab-${tab}`}
                  onClick={() => setActiveTab(tab as any)} 
-                 className={`relative px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors z-10 btn-hover-scale ${
+                 className={`relative px-3 sm:px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors z-10 btn-hover-scale ${
                    activeTab === tab ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
                  }`}
                >
@@ -495,7 +577,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-10 sm:px-14 pt-24 pb-32 relative z-10">
+      <main className="max-w-2xl mx-auto px-4 sm:px-14 pt-24 pb-32 relative z-10">
         <AnimatePresence>
           {globalRecoveryMode && (
             <motion.div 

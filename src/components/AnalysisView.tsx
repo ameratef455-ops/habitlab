@@ -373,9 +373,9 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
 
       {activeSubTab === "chart" && (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 text-right">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 text-right">
             {/* Unified Focus and Commitment Panel */}
-            <div className="p-8 rounded-[2.5rem] bg-indigo-50 border border-indigo-100 text-right shadow-inner flex flex-col justify-between">
+            <div className="p-5 sm:p-8 rounded-[2.5rem] bg-indigo-50 border border-indigo-100 text-right shadow-inner flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <Sparkles className="w-6 h-6 text-indigo-500" />
@@ -421,7 +421,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
             </div>
 
             {/* Focus Breakdown */}
-            <div className="p-8 rounded-[2.5rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50 text-right">
+            <div className="p-5 sm:p-8 rounded-[2.5rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50 text-right">
               <div className="flex items-center justify-between mb-8">
                 <Sparkles className="w-5 h-5 text-indigo-500" />
                 <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
@@ -468,7 +468,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
           </div>
 
           {/* Time Adherence Section */}
-          <div className="p-8 rounded-[2.5rem] bg-indigo-900 text-white border border-indigo-800 shadow-2xl shadow-indigo-500/20 text-right overflow-hidden relative">
+          <div className="p-5 sm:p-8 rounded-[2.5rem] bg-indigo-900 text-white border border-indigo-800 shadow-2xl shadow-indigo-500/20 text-right overflow-hidden relative">
             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500 blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2" />
             <div className="relative z-10">
               <div className="flex items-center justify-between mb-8">
@@ -536,7 +536,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
       )}
 
       {activeSubTab === "achievements" && (
-        <div className="p-8 rounded-[2.5rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50 text-right">
+        <div className="p-5 sm:p-8 rounded-[2.5rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50 text-right">
           <div className="flex items-center justify-between mb-8">
             <Flame className="w-6 h-6 text-orange-500" />
             <h3 className="text-lg font-black uppercase tracking-widest text-slate-800 dark:text-slate-100">
@@ -645,7 +645,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
       )}
 
       {activeSubTab === "chart" && (
-        <div className="p-8 rounded-[2.5rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50">
+        <div className="p-5 sm:p-8 rounded-[2.5rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50">
           <div className="flex items-center justify-between mb-8 text-right">
             <TrendingUp className="w-5 h-5 text-indigo-500" />
             <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
