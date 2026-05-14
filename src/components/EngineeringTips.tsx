@@ -9,27 +9,27 @@ interface EngineeringTipsProps {
 export const EngineeringTips: React.FC<EngineeringTipsProps> = ({ onClose }) => {
   const tips = [
     {
-      icon: <Sparkles className="w-5 h-5 text-amber-500" />,
+      icon: <Sparkles className="w-5 h-5 text-blue-500" />,
       title: 'تجنب الانفجار العظيم',
       description: 'المخ يكره التغيير المفاجئ. ١٠ دقائق يومياً تبني إدماناً إيجابياً، بينما ٣ ساعات في يوم واحد تبني مقاومة.'
     },
     {
       icon: <Clock className="w-5 h-5 text-blue-500" />,
       title: 'استغلال الأوقات البينية',
-      description: 'لا تنتظر تفرغاً كاملاً. استغل المساحات البينية المهدرة لبناء عاداتك (مثل الاستماع لدرس في المواصلات).'
+      description: 'لا تنتظر تفرغاً كاملاً. استغل المساحات البينية المهدرة لبناء مهاراتك (مثل الاستماع لدرس في المواصلات).'
     },
     {
-      icon: <Repeat className="w-5 h-5 text-indigo-500" />,
+      icon: <Repeat className="w-5 h-5 text-blue-500" />,
       title: 'استبدال المسار',
-      description: 'لا يمكنك محو العادة السيئة، لكن يمكنك استبدالها. ابحث عن المحفز، واستبدل العادة بإجراء بسيط يؤدي لنفس النتيجة.'
+      description: 'لا يمكنك محو المهارة السيئة، لكن يمكنك استبدالها. ابحث عن المحفز، واستبدل المهارة بإجراء بسيط يؤدي لنفس النتيجة.'
     },
     {
-      icon: <ShieldAlert className="w-5 h-5 text-rose-500" />,
+      icon: <ShieldAlert className="w-5 h-5 text-blue-500" />,
       title: 'بروتوكول التعافي',
       description: 'إذا ضعفت، لا تهدم النظام بأكمله وتجلد ذاتك. السقوط مرة لا يعني فشل البرمجة؛ استأنف مسارك فوراً في المرة القادمة.'
     },
     {
-      icon: <Lightbulb className="w-5 h-5 text-emerald-500" />,
+      icon: <Lightbulb className="w-5 h-5 text-blue-500" />,
       title: 'الفراغ يصنع الانحدار',
       description: 'عندما لا يجد العقل خطة عمل واضحة وقت الفراغ، يلجأ فوراً إلى مصادر الدوبامين الرخيص. خطط أوقاتك لتجنب السقوط.'
     }

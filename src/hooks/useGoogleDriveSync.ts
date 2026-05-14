@@ -9,8 +9,11 @@ export interface AppData {
 }
 
 const CLIENT_ID = '561357148109-h9jvtvark5evfh9kmqb3feavp5fu2bbm.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/drive.file';
-const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar';
+const DISCOVERY_DOCS = [
+  'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
+  'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'
+];
 const FILENAME = 'habit_lab_data.json';
 
 export type SyncStatus = 'Offline' | 'Syncing...' | 'Synced' | 'Error';
@@ -40,7 +43,7 @@ export function useGoogleDriveSync(
       gapi.load('client', async () => {
         try {
           await gapi.client.init({
-            discoveryDocs: [DISCOVERY_DOC],
+            discoveryDocs: DISCOVERY_DOCS,
           });
           resolve();
         } catch (e) {

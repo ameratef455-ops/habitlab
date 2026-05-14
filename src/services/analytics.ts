@@ -19,6 +19,14 @@ export const trackHabitCompletion = (habitName: string, streak: number) => {
   });
 };
 
+export const trackRelapse = (habitName: string, reason: string) => {
+  trackEvent('habit_relapse', {
+    habit_name: habitName,
+    reason: reason,
+    timestamp: new Date().toISOString()
+  });
+};
+
 export const trackKhalwaCompletion = (activityName: string) => {
   trackEvent('khalwa_activity_completed', {
     activity_name: activityName,

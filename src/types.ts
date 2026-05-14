@@ -29,6 +29,10 @@ export interface Habit {
   celebrationIcon?: string;
   replacingHabit?: string;
   isRecoveryModeEnabled?: boolean;
+  enableReminders?: boolean;
+  reminderEventId?: string;
+  nearGoalEventId?: string;
+  awayGoalEventId?: string;
   notes: Array<{ 
     date: string; 
     content: string; 
@@ -39,6 +43,10 @@ export interface Habit {
     actualTime?: string;
     focus?: number; // 1-5
     goalLevel?: 'min' | 'expected' | 'exceeded';
+  }>;
+  relapses?: Array<{
+    date: string;
+    reason: string;
   }>;
 }
 
@@ -54,46 +62,45 @@ export type AppTheme = 'light' | 'dark';
 
 export const ICON_COLORS = [
   'bg-slate-900',
-  'bg-indigo-500',
-  'bg-emerald-500',
-  'bg-rose-500',
-  'bg-amber-500',
-  'bg-purple-500',
-  'bg-cyan-500',
-  'bg-pink-500',
+  'bg-slate-600',
+  'bg-slate-400',
+  'bg-blue-400',
+  'bg-blue-500',
+  'bg-blue-600',
+  'bg-blue-700',
+  'bg-blue-800',
 ];
 
 export const USER_RANKS = [
-  "بداية الرحلة 🌱",
-  "مُبتدئ الاستمرارية 👣",
-  "طالب الانضباط 📚",
-  "مبادر واعد 💡",
-  "صاحب الإرادة ✊",
-  "مُمارس مستمر 🔄",
-  "منضبط حقيقي 🤝",
-  "خبير العادات 🎯",
-  "محترف الإنجاز ⚡",
-  "قائد التغيير 👑",
-  "سيد الروتين 🥇",
-  "قدوة الانضباط 🌟",
-  "صانع الأثر 🌍",
-  "بطل الاستمرارية 🏆",
-  "أستاذ الفاعلية 🎓",
-  "ملهم النجاح ✨",
-  "رائد العادات 🚀",
-  "خبير التطوير 📈",
-  "أسطورة الالتزام 💎",
-  "مهندس السلوك 🛠️",
-  "أيقونة الإنجاز 🏅",
-  "حكيم العادات 🦉",
+  "مبتدئ 🌟",
+  "متدرب 🚀",
+  "هاوي 🎨",
+  "مبادر 💡",
+  "مثابر 🏃",
+  "ممارس 🔄",
+  "منضبط 🎯",
+  "محترف ⚡",
+  "خبير 🧠",
+  "متقدم 📈",
+  "قائد 👑",
+  "ملهم ✨",
+  "سيد 🥇",
+  "رائد 🚀",
+  "بطل 🏆",
+  "أسطورة 💎",
+  "حكيم 🦉",
+  "نخبة 🦅",
+  "فارس 🐎",
   "سيد الوقت ⏳",
-  "نجم الاستمرارية ⭐️",
-  "عبقري الانضباط 🧠",
-  "متقن المهارات 🎨",
-  "رئيس الإنجازات 📊",
-  "ذروة الالتزام 🏔️",
-  "المُعلم الأكبر 📜",
-  "نبراس الاستمرارية 🕯️"
+  "أيقونة 🏅",
+  "عبقري ⚛️",
+  "سفير 🌍",
+  "أستاذ 🎓",
+  "متقن 🎯",
+  "زعيم 🏛️",
+  "محارب ⚔️",
+  "منارة 🗼",
+  "عظيم 🏔️",
 ];
 
 export const CATEGORIES = [

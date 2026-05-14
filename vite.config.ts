@@ -14,9 +14,9 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: 'autoUpdate',
         manifest: {
-          name: 'Habit Lab',
-          short_name: 'HabitLab',
-          description: 'معمل العادات - طور نفسك بطريقة ممتعة',
+          name: 'Aura - Progress Your Skills',
+          short_name: 'Aura',
+          description: 'Aura - مسار مهاراتك اليومية',
           theme_color: '#6366f1',
           background_color: '#ffffff',
           display: 'standalone',

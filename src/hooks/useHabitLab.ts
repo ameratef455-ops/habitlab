@@ -58,6 +58,7 @@ export function useHabitLab() {
     setHabits([...habits, newHabit].sort((a, b) => {
       return (a.order || '').localeCompare(b.order || '') || (a.time || '').localeCompare(b.time || '');
     }));
+    return newHabit;
   };
 
   const updateHabit = (id: string, updates: Partial<Habit>) => {

@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import * as LucideIcons from 'lucide-react';
 import { 
   Plus, 
   Flame, 
@@ -30,7 +31,14 @@ import {
   ChevronRight as ChevronRightIcon,
   Cloud,
   CloudOff,
-  RefreshCw
+  RefreshCw,
+  WifiOff,
+  Target,
+  Bell,
+  Shield,
+  MapPin,
+  Timer,
+  Activity
 } from 'lucide-react';
 import { useHabitLab } from './hooks/useHabitLab';
 import { HabitCard } from './components/HabitCard';
@@ -42,10 +50,23 @@ import { TutorialOverlay } from './components/TutorialOverlay';
 import { EngineeringTips } from './components/EngineeringTips';
 import { useGoogleDriveSync } from './hooks/useGoogleDriveSync';
 import { Habit, AppTheme, CATEGORIES, USER_RANKS } from './types';
-import { trackHabitCompletion } from './services/analytics';
+import { trackHabitCompletion, trackRelapse } from './services/analytics';
 import { getMotivationalMessage, getProgressSummary } from './services/geminiService';
+import { createOrUpdateEvent, createOrUpdateGoalEvent, deleteEvent, getRRuleFromHabit, initCalendar } from './services/calendarService';
 
 export default function App() {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
   const { 
     habits, 
     points,
@@ -87,7 +108,7 @@ export default function App() {
       const summary = await getProgressSummary(habits);
       
       const shareData = {
-        title: 'تقرير معمل العادات 🧪',
+        title: 'تقرير Aura 🧪',
         text: summary,
         url: window.location.href,
       };
@@ -128,14 +149,14 @@ export default function App() {
           showFeedback('تمت المشاركة بنجاح! 🚀');
         } catch (shareErr: any) {
           if (shareErr.name === 'AbortError') {
-            const success = await copyToClipboard(`${shareData.text}\n\nتابعني في المعمل: ${shareData.url}`);
+            const success = await copyToClipboard(`${shareData.text}\n\nتابعني في Aura: ${shareData.url}`);
             if (success) showFeedback('تم نسخ التقرير للحافظة! 📋');
           } else {
             throw shareErr;
           }
         }
       } else {
-        const success = await copyToClipboard(`${shareData.text}\n\nتابعني في المعمل: ${shareData.url}`);
+        const success = await copyToClipboard(`${shareData.text}\n\nتابعني في Aura: ${shareData.url}`);
         if (success) {
           showFeedback('تم نسخ التقرير للحافظة! شاركه مع صحابك 🚀');
         } else {
@@ -213,13 +234,13 @@ export default function App() {
       const width = doc.internal.pageSize.getWidth();
       
       // Header Background
-      doc.setFillColor(99, 102, 241); // indigo-500
+      doc.setFillColor(99, 102, 241); // blue-500
       doc.rect(0, 0, width, 45, 'F');
       
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(26);
       doc.setFont("helvetica", "bold");
-      doc.text('Habit Lab Report', 20, 28);
+      doc.text('Aura Progress Report', 20, 28);
       
       doc.setFontSize(11);
       doc.setFont("helvetica", "normal");
@@ -289,7 +310,7 @@ export default function App() {
         doc.text(`Habit: ${h.name.substring(0, 30)}`, 25, y);
         
         doc.setFontSize(11);
-        doc.setTextColor(99, 102, 241); // indigo-500
+        doc.setTextColor(99, 102, 241); // blue-500
         doc.text(`${h.streak} Day Streak`, width - 25, y, { align: 'right' });
         
         doc.setFontSize(9);
@@ -304,7 +325,7 @@ export default function App() {
         }
       });
       
-      doc.save(`HabitLab_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.save(`Aura_Report_${new Date().toISOString().split('T')[0]}.pdf`);
       showFeedback('تم استخراج التقرير بنجاح! 🚀', 'success');
     } catch (err) {
       console.error(err);
@@ -332,12 +353,12 @@ export default function App() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  const installPWA = () => {
+  const handleInstallPWA = () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
       deferredPrompt.userChoice.then((choiceResult: any) => {
         if (choiceResult.outcome === 'accepted') {
-          showFeedback('مبارك! تم تثبيت تطبيق معمل العادات 🚀', 'success');
+          showFeedback('مبارك! تم تثبيت تطبيق Aura 🚀', 'success');
         }
         setDeferredPrompt(null);
       });
@@ -352,9 +373,10 @@ export default function App() {
   };
 
   const [showSupport, setShowSupport] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showTips, setShowTips] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [zoomIcon, setZoomIcon] = useState<{ icon: string, name: string } | null>(null);
 
   useEffect(() => {
     const hasSeenTutorial = localStorage.getItem('hasSeenTutorial');
@@ -364,7 +386,7 @@ export default function App() {
     }
   }, []);
 
-  const [activeTab, setActiveTab] = useState<'habits' | 'analysis' | 'levels'>('habits');
+  const [activeTab, setActiveTab] = useState<'home' | 'habits' | 'analysis' | 'levels' | 'privacy'>('home');
   const [selectedCategory, setSelectedCategory] = useState<string>('الكل');
   const [showModal, setShowModal] = useState(false);
   const [habitToEdit, setHabitToEdit] = useState<Habit | undefined>();
@@ -380,14 +402,32 @@ export default function App() {
   const [feedback, setFeedback] = useState<{ msg: string; type: 'success' | 'info' | 'alert' } | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
 
-  const filteredHabits = habits.filter(h => {
-    const matchesCategory = selectedCategory === 'الكل' || h.category === selectedCategory;
-    const matchesSearch = h.name.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesCategory && matchesSearch;
-  }).sort((a, b) => {
-    if (a.time && b.time) return a.time.localeCompare(b.time);
-    return String(a.order).localeCompare(String(b.order));
-  });
+  useEffect(() => {
+    if (window.location.hash === '#privacy') {
+      setActiveTab('privacy');
+    }
+    
+    const handleHashChange = () => {
+      if (window.location.hash === '#privacy') {
+        setActiveTab('privacy');
+      } else if (activeTab === 'privacy') {
+        setActiveTab('home');
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [activeTab]);
+
+  const filteredHabits = useMemo(() => {
+    return habits.filter(h => {
+      const matchesCategory = selectedCategory === 'الكل' || h.category === selectedCategory;
+      const matchesSearch = h.name.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesCategory && matchesSearch;
+    }).sort((a, b) => {
+      if (a.time && b.time) return a.time.localeCompare(b.time);
+      return String(a.order).localeCompare(String(b.order));
+    });
+  }, [habits, selectedCategory, searchTerm]);
 
   const handleEdit = (habit: Habit) => {
     setHabitToEdit(habit);
@@ -396,17 +436,79 @@ export default function App() {
 
   const handleSave = (habitData: any) => {
     setConfirmAction({
-      title: habitToEdit ? 'تحديث العادة؟' : 'إضافة عادة؟',
-      description: habitToEdit ? 'هل تريد حفظ التعديلات الجديدة على هذه العادة؟' : 'سيتم توجيه المعمل للبدء بتتبع هذه العادة الجديدة.',
-      icon: <Sparkles className="w-12 h-12 text-indigo-500 mb-6 mx-auto" />,
-      onConfirm: () => {
+      title: habitToEdit ? 'تحديث المهارة؟' : 'إضافة مهارة؟',
+      description: habitToEdit ? 'هل تريد حفظ التعديلات الجديدة على هذه المهارة؟' : 'سيتم توجيه Aura للبدء بتتبع هذه المهارة الجديدة.',
+      icon: <Sparkles className="w-12 h-12 text-blue-500 mb-6 mx-auto" />,
+      onConfirm: async () => {
+        let finalHabitData = { ...habitData };
+        let finalId = habitToEdit?.id;
+        
         if (habitToEdit) {
-          updateHabit(habitToEdit.id, habitData);
-          showFeedback('تم تحديث العادة بنجاح! ✨');
+          updateHabit(habitToEdit.id, finalHabitData);
+          showFeedback('تم تحديث المهارة بنجاح! ✨');
         } else {
-          addHabit(habitData);
-          showFeedback('تمت إضافة عادة جديدة للمختبر! 🧪');
+          const newH = addHabit(finalHabitData);
+          finalId = newH.id;
+          showFeedback('تمت إضافة مهارة جديدة للمختبر! 🧪');
         }
+
+        // Calendar sync handling
+        if (finalHabitData.enableReminders && isSignedIn) {
+          showFeedback('جاري ضبط التنبيهات في Google Calendar...');
+          try {
+            await initCalendar();
+            const rrule = getRRuleFromHabit(finalHabitData.frequency, finalHabitData.customFrequency);
+            
+            const reminderId = await createOrUpdateEvent(
+              habitToEdit?.reminderEventId || null,
+              `Aura: ${finalHabitData.name}`,
+              `وقت المهارة: ${finalHabitData.name} - ${finalHabitData.category}`,
+              finalHabitData.time || '09:00',
+              rrule
+            );
+
+            let nearGoalId = habitToEdit?.nearGoalEventId || null;
+            if (finalHabitData.nearGoal?.targetDate) {
+              nearGoalId = await createOrUpdateGoalEvent(
+                nearGoalId,
+                `الهدف القريب: ${finalHabitData.name}`,
+                finalHabitData.nearGoal.description,
+                finalHabitData.nearGoal.targetDate
+              ) || nearGoalId;
+            }
+
+            let awayGoalId = habitToEdit?.awayGoalEventId || null;
+            if (finalHabitData.awayGoal?.targetDate) {
+              awayGoalId = await createOrUpdateGoalEvent(
+                awayGoalId,
+                `الهدف البعيد: ${finalHabitData.name}`,
+                finalHabitData.awayGoal.description,
+                finalHabitData.awayGoal.targetDate
+              ) || awayGoalId;
+            }
+
+            updateHabit(finalId, { 
+              reminderEventId: reminderId || undefined,
+              nearGoalEventId: nearGoalId || undefined,
+              awayGoalEventId: awayGoalId || undefined
+            });
+            
+          } catch (e) {
+            console.error("Calendar sync error", e);
+            showFeedback('حصل مشكلة في ضبط التقويم!', 'alert');
+          }
+        } else if (!finalHabitData.enableReminders && habitToEdit) {
+           // Delete reminders if they unchecked the box
+           if (habitToEdit.reminderEventId) await deleteEvent(habitToEdit.reminderEventId);
+           if (habitToEdit.nearGoalEventId) await deleteEvent(habitToEdit.nearGoalEventId);
+           if (habitToEdit.awayGoalEventId) await deleteEvent(habitToEdit.awayGoalEventId);
+           updateHabit(finalId, { 
+             reminderEventId: undefined, 
+             nearGoalEventId: undefined, 
+             awayGoalEventId: undefined 
+           });
+        }
+
         setHabitToEdit(undefined);
         setConfirmAction(null);
         setShowModal(false);
@@ -420,16 +522,35 @@ export default function App() {
   };
 
   const handleDelete = (id: string) => {
+    const habitToDelete = habits.find(h => h.id === id);
     setConfirmAction({
       title: 'هل أنت متأكد؟',
-      description: 'سيتم حذف العادة وكل سجلاتها نهائياً من المختبر.',
-      icon: <Trash2 className="w-12 h-12 text-rose-500 mb-6 mx-auto" />,
-      onConfirm: () => {
+      description: 'سيتم حذف المهارة وكل سجلاتها نهائياً من Aura.',
+      icon: <Trash2 className="w-12 h-12 text-blue-500 mb-6 mx-auto" />,
+      onConfirm: async () => {
+        if (habitToDelete?.reminderEventId) {
+          await deleteEvent(habitToDelete.reminderEventId);
+        }
         deleteHabit(id);
         setConfirmAction(null);
-        showFeedback('تم حذف العادة من السجل.', 'alert');
+        showFeedback('تم حذف المهارة من السجل.', 'alert');
       }
     });
+  };
+
+  const handleRelapse = (id: string, reason: string) => {
+    let habitName = '';
+    const h = habits.find(x => x.id === id);
+    if (h) {
+      habitName = h.name;
+      updateHabit(id, {
+         streak: 0,
+         isRecoveryModeEnabled: true,
+         relapses: [...(h.relapses || []), { date: new Date().toISOString(), reason }]
+      });
+      trackRelapse(habitName, reason);
+      showFeedback('معلش، هتتعوض بكرة. تم تفعيل وضع الاستعادة تلقائياً', 'alert');
+    }
   };
 
   const handleComplete = async (habit: Habit, note?: string, type?: 'text' | 'voice', recovery?: boolean, questionnaire?: any) => {
@@ -458,7 +579,6 @@ export default function App() {
     trackHabitCompletion(habit.name, habit.streak + 1);
     
     // UI feedback immediately
-    setShowCelebration(true);
     showFeedback('إنجاز عظيم! تم تسجيل النقطة. 🔥', 'success', true);
     
     // Background the AI motivational message
@@ -469,7 +589,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fafafa] text-slate-900 font-sans selection:bg-indigo-500 selection:text-white transition-all duration-700 overflow-x-hidden">
+    <div className="min-h-screen bg-blue-50/30 dark:bg-blue-950 text-slate-900 dark:text-blue-50 font-sans selection:bg-blue-500 selection:text-white transition-all duration-700 overflow-x-hidden">
       <AnimatePresence>
         {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
       </AnimatePresence>
@@ -479,207 +599,181 @@ export default function App() {
         {loading && <SplashScreen key="splash" />}
       </AnimatePresence>
       
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/70 dark:bg-slate-950/70 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800/50 h-16 flex items-center">
-        <div className="max-w-2xl mx-auto w-full px-4 sm:px-14 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-             {activeTab !== 'habits' ? (
-                <button 
-                  onClick={() => setActiveTab('habits')}
-                  className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-indigo-50 transition-all shrink-0"
-                >
-                   <ChevronRightIcon className="w-5 h-5" />
-                </button>
-             ) : (
-                <div className="relative shrink-0">
-                   <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center shadow-lg">
-                      <Flame className="w-5 h-5 text-white" />
-                   </div>
-                </div>
-             )}
-             <div className="text-right flex flex-col justify-center max-w-[90px] sm:max-w-none">
-                <h1 className="text-[10px] sm:text-xs font-black tracking-tight text-slate-800 uppercase truncate">Habit Lab</h1>
-                {!isSignedIn ? (
-                   <button onClick={signIn} className="flex items-center gap-1.5 justify-end group mt-0.5">
-                      <CloudOff className="w-3 h-3 text-slate-400 group-hover:text-indigo-500 transition-colors shrink-0" />
-                      <span className="text-[6px] sm:text-[7px] font-bold text-slate-400 uppercase tracking-widest group-hover:text-indigo-500 transition-colors truncate">Sign in</span>
-                   </button>
-                ) : (
-                   <div className="flex items-center gap-1.5 justify-end mt-0.5">
-                     {syncStatus === 'Syncing...' && <RefreshCw className="w-3 h-3 text-indigo-500 animate-spin shrink-0" />}
-                     {syncStatus === 'Synced' && <Cloud className="w-3 h-3 text-emerald-500 shrink-0" />}
-                     {syncStatus === 'Error' && <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />}
-                     {syncStatus === 'Offline' && <CloudOff className="w-3 h-3 text-slate-400 shrink-0" />}
-                     <p className="text-[6px] sm:text-[7px] font-bold text-slate-400 uppercase tracking-widest truncate">{syncStatus}</p>
-                   </div>
-                )}
-             </div>
-          </div>
-          
-          <div className="flex p-0.5 sm:p-1 bg-slate-100 rounded-2xl border border-slate-200 relative mx-1">
-             {['habits', 'levels', 'analysis'].map((tab) => (
-               <button 
-                 key={`header-tab-${tab}`}
-                 onClick={() => setActiveTab(tab as any)} 
-                 className={`relative px-2 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-colors z-10 btn-hover-scale ${
-                   activeTab === tab ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
-                 }`}
-               >
-                 {activeTab === tab && (
-                   <motion.div 
-                     layoutId="activeTab"
-                     className="absolute inset-0 bg-white shadow-md rounded-xl z-[-1]"
-                     transition={{ type: "spring", bounce: 0.1, duration: 0.3 }}
-                   />
-                 )}
-                 {tab === 'habits' ? 'العادات' : tab === 'levels' ? 'المستوى' : 'التحليلات'}
-               </button>
-             ))}
-          </div>
-
-          <div className="flex items-center gap-1.5 sm:gap-2">
-             <button 
-               onClick={() => setGlobalRecoveryMode(!globalRecoveryMode)}
-               className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all shadow-md btn-hover-scale glass-shine shrink-0 ${globalRecoveryMode ? 'bg-amber-500 text-white shadow-amber-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 border border-slate-200 dark:border-slate-700'}`}
-               title="وضع الاستشفاء العالمي"
-             >
-                <Zap className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${globalRecoveryMode ? 'fill-current' : ''}`} />
-             </button>
-             <div className="relative">
-               <button 
-                 onClick={() => setShowSettings(!showSettings)}
-                 className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all shadow-sm shrink-0 ${showSettings ? 'bg-indigo-500 text-white shadow-indigo-500/20' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-               >
-                 <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-               </button>
-             </div>
-          </div>
-        </div>
-      </header>
-
       <AnimatePresence>
-        {showSettings && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        {showDashboard && (
+          <div className="fixed inset-0 z-[100] p-4 flex items-start justify-center sm:items-center">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm"
-              onClick={() => setShowSettings(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
+              onClick={() => setShowDashboard(false)}
             />
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.9, y: -20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-800 z-10 p-6 sm:p-8"
+              exit={{ opacity: 0, scale: 0.9, y: -20 }}
+              className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden flex flex-col border border-blue-50 dark:border-blue-900/30"
             >
-               <div className="flex items-center justify-between mb-8">
-                 <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">الإعدادات</h2>
-                 <button onClick={() => setShowSettings(false)} className="p-2 bg-slate-50 dark:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
-                   <ChevronRightIcon className="w-5 h-5 rotate-180" />
-                 </button>
-               </div>
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -translate-y-16 translate-x-16" />
+              
+              <div className="p-8 pb-4 flex items-center justify-between border-b border-slate-50 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+                    <Zap className="w-6 h-6 fill-current" />
+                  </div>
+                  <div className="text-right">
+                    <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">لوحة التحكم</h2>
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Aura Dashboard</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowDashboard(false)}
+                  className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <ChevronRightIcon className="w-5 h-5 rotate-180" />
+                </button>
+              </div>
 
-               <div className="space-y-3">
-                 <button 
-                   onClick={() => {
-                     setShowTips(true);
-                     setShowSettings(false);
-                   }} 
-                   className="w-full flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-100 hover:bg-blue-100 transition-colors group"
-                 >
-                   <span className="text-sm font-black text-blue-600">نصائح المخطط الهندسي</span>
-                   <span className="text-xl group-hover:scale-110 transition-transform">🧠</span>
-                 </button>
+              <div className="p-8 space-y-8">
+                {/* Account & Sync Section */}
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] text-right">الحساب والمزامنة السحابية</p>
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex flex-row-reverse items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isSignedIn ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>
+                          {isSignedIn ? <Cloud className="w-5 h-5" /> : <CloudOff className="w-5 h-5" />}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-black text-slate-800 dark:text-slate-100">
+                            {isSignedIn ? 'سحابة Aura متصلة' : 'المزامنة معطلة'}
+                          </p>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{syncStatus}</p>
+                        </div>
+                      </div>
+                      {!isSignedIn ? (
+                        <button 
+                          onClick={() => { signIn(); setShowDashboard(false); }} 
+                          className="px-6 py-2.5 bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:scale-105 transition-all"
+                        >
+                          تسجيل دخول
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => { logout(); setShowDashboard(false); }} 
+                          className="px-6 py-2.5 bg-red-50 text-red-600 dark:bg-red-900/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900/30"
+                        >
+                          خروج
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-                 <button 
-                   onClick={() => {
-                     setShowSupport(true);
-                     setShowSettings(false);
-                   }} 
-                   className="w-full flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-100 hover:bg-amber-100 transition-colors group"
-                 >
-                   <span className="text-sm font-black text-amber-600">ادعم المشروع ☕</span>
-                   <ChevronRightIcon className="w-4 h-4 text-amber-400 group-hover:-translate-x-1 transition-transform" />
-                 </button>
+                {/* Settings & Tools Section */}
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] text-right">أدوات إضافية</p>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      onClick={() => {
+                        exportData();
+                        setShowDashboard(false);
+                      }} 
+                      className="flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-800 rounded-3xl border border-slate-100 hover:bg-blue-50 hover:border-blue-200 transition-colors group"
+                    >
+                      <span className="text-2xl mb-2 group-hover:-translate-y-1 transition-transform">💾</span>
+                      <span className="text-xs font-black text-slate-600">نسخة احتياطية</span>
+                    </button>
+                    <label className="flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-800 rounded-3xl border border-slate-100 hover:bg-blue-50 hover:border-blue-200 transition-colors cursor-pointer group">
+                      <span className="text-2xl mb-2 group-hover:-translate-y-1 transition-transform">📁</span>
+                      <span className="text-xs font-black text-slate-600">استعادة للبيانات</span>
+                      <input type="file" accept=".json" onChange={(e) => { importData(e); setShowDashboard(false); }} className="hidden" />
+                    </label>
+                  </div>
 
-                 <div className="grid grid-cols-2 gap-3">
-                   <button 
-                     onClick={() => {
-                       exportData();
-                       setShowSettings(false);
-                     }} 
-                     className="flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 hover:bg-slate-100 transition-colors"
-                   >
-                     <span className="text-lg mb-2">💾</span>
-                     <span className="text-xs font-black text-slate-600">تصدير الداتا</span>
-                   </button>
-                   <label className="flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 hover:bg-slate-100 transition-colors cursor-pointer">
-                     <span className="text-lg mb-2">📁</span>
-                     <span className="text-xs font-black text-slate-600">استيراد الداتا</span>
-                     <input type="file" accept=".json" onChange={(e) => { importData(e); setShowSettings(false); }} className="hidden" />
-                   </label>
-                 </div>
+                  <button 
+                    onClick={() => {
+                      generatePDF();
+                      setShowDashboard(false);
+                    }} 
+                    className="w-full flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-blue-200 transition-all"
+                  >
+                    <span className="text-sm font-black text-slate-600 dark:text-slate-300">مستند التقرير PDF</span>
+                    <span className="text-xl">📄</span>
+                  </button>
 
-                 <button 
-                   onClick={() => {
-                     generatePDF();
-                     setShowSettings(false);
-                   }} 
-                   className="w-full flex items-center justify-between p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 hover:bg-indigo-100 transition-colors group"
-                 >
-                   <span className="text-sm font-black text-indigo-600">تقرير الإنجاز (PDF)</span>
-                   <span className="text-xl group-hover:scale-110 transition-transform">📄</span>
-                 </button>
+                  <button 
+                    onClick={() => { setShowTips(true); setShowDashboard(false); }}
+                    className="w-full flex flex-row-reverse items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-blue-200 transition-all"
+                  >
+                    <div className="text-right">
+                       <p className="text-sm font-black text-slate-800 dark:text-slate-100">مخطط Aura الهندسي</p>
+                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Blueprint Tips</p>
+                    </div>
+                    <Sparkles className="w-5 h-5 text-blue-400" />
+                  </button>
+                </div>
+              </div>
 
-                 <button 
-                   onClick={() => {
-                     installPWA();
-                     setShowSettings(false);
-                   }} 
-                   className="w-full flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 hover:bg-emerald-100 transition-colors group"
-                 >
-                   <span className="text-sm font-black text-emerald-600">تثبيت التطبيق 📱</span>
-                   <Cloud className="w-5 h-5 text-emerald-500 group-hover:scale-110 transition-transform" />
-                 </button>
-
-                 {isSignedIn && (
-                   <div className="flex flex-col gap-2 mt-4">
-                     <button 
-                       onClick={() => {
-                         logout();
-                         setShowSettings(false);
-                       }} 
-                       className="w-full flex items-center justify-between p-4 bg-rose-50 dark:bg-rose-900/20 rounded-2xl border border-rose-100 hover:bg-rose-100 transition-colors group"
-                     >
-                       <span className="text-sm font-black text-rose-600">تسجيل الخروج من المزامنة</span>
-                       <CloudOff className="w-5 h-5 text-rose-500 group-hover:scale-110 transition-transform" />
-                     </button>
-                     <button 
-                       onClick={async () => {
-                         if (window.confirm('هل أنت متأكد من حذف بياناتك من جوجل درايف؟ لا يمكن التراجع عن هذه الخطوة.')) {
-                            const success = await deleteSyncData();
-                            if (success) {
-                               showFeedback('تم حذف بيانات المزامنة بنجاح', 'success');
-                            } else {
-                               showFeedback('حدث خطأ أثناء حذف بيانات المزامنة', 'alert');
-                            }
-                            setShowSettings(false);
-                         }
-                       }} 
-                       className="w-full flex items-center justify-between p-4 bg-red-100 dark:bg-red-900/30 rounded-2xl border border-red-200 hover:bg-red-200 transition-colors group"
-                     >
-                       <span className="text-sm font-black text-red-700">حذف بيانات المزامنة</span>
-                       <span className="text-xl group-hover:scale-110 transition-transform">🗑️</span>
-                     </button>
-                   </div>
-                 )}
-               </div>
+              {/* Privacy Links Footer */}
+              <div className="p-8 bg-slate-50 dark:bg-slate-800/50 flex flex-col gap-4">
+                <button 
+                  onClick={() => {
+                    window.location.hash = '#privacy';
+                    setShowDashboard(false);
+                  }}
+                  className="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-blue-500 transition-colors text-right flex items-center justify-end gap-2 group"
+                >
+                  سياسة خصوصية Aura لضمان الأمان
+                  <Shield className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                </button>
+                <div className="pt-2 flex justify-center border-t border-slate-200 dark:border-slate-700/50 border-dashed">
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">v1.0 Aura Protocol</p>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      <main className="max-w-2xl mx-auto px-4 sm:px-14 pt-24 pb-32 relative z-10">
+      {/* Zoom Icon Window */}
+      <AnimatePresence>
+        {zoomIcon && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
+              onClick={() => setZoomIcon(null)}
+            />
+            <motion.div 
+              initial={{ scale: 0.5, opacity: 1 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.5, opacity: 0 }}
+              className="relative bg-white dark:bg-slate-900 p-12 rounded-[4rem] shadow-2xl border border-blue-50 dark:border-slate-800 flex flex-col items-center gap-8"
+            >
+              <div className="w-48 h-48 rounded-[3.5rem] bg-blue-500 flex items-center justify-center text-white shadow-3xl shadow-blue-500/40">
+                {React.createElement((LucideIcons as any)[zoomIcon.icon] || CheckCircle2, { className: "w-24 h-24" })}
+              </div>
+              <div className="text-center">
+                <h3 className="text-3xl font-black text-slate-800 dark:text-white mb-2">{zoomIcon.name}</h3>
+                <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.5em]">Active Skill Mode</p>
+              </div>
+              <button 
+                onClick={() => setZoomIcon(null)}
+                className="w-full py-5 px-10 bg-slate-100 dark:bg-slate-800 rounded-3xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-blue-500 transition-all active:scale-95"
+              >
+                عودة للمختبر
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <main className="max-w-2xl mx-auto px-4 sm:px-14 pt-10 pb-32 relative z-10">
         <AnimatePresence>
           {globalRecoveryMode && (
             <motion.div 
@@ -689,7 +783,7 @@ export default function App() {
               exit={{ height: 0, opacity: 0 }}
               className="mb-6 overflow-hidden"
             >
-              <div className="bg-amber-500 text-white px-6 py-3 rounded-2xl font-black text-xs text-center shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2">
+              <div className="bg-blue-500 text-white px-6 py-3 rounded-2xl font-black text-xs text-center shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2">
                 <Zap className="w-4 h-4 fill-current" />
                 أنت الآن في وضع الاستعداد
               </div>
@@ -701,7 +795,7 @@ export default function App() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="mb-8 p-5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-3xl shadow-xl shadow-indigo-500/20 text-sm font-semibold flex items-center gap-3"
+              className="mb-8 p-5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-3xl shadow-xl shadow-blue-500/20 text-sm font-semibold flex items-center gap-3"
             >
               <Sparkles className="w-5 h-5 flex-shrink-0" />
               <p className="flex-1 text-right">{motivation}</p>
@@ -720,21 +814,67 @@ export default function App() {
                 transition={{ duration: 0.15 }}
                 className="text-center py-20 px-6 space-y-8"
               >
-                <div className="w-24 h-24 bg-indigo-500 rounded-3xl flex items-center justify-center text-white mx-auto shadow-2xl shadow-indigo-500/40">
+                <div className="w-24 h-24 bg-blue-500 rounded-3xl flex items-center justify-center text-white mx-auto shadow-2xl shadow-blue-500/40">
                    <Coffee className="w-12 h-12" />
                 </div>
                 <div className="space-y-4">
                    <h2 className="text-3xl font-black text-slate-800">إنجازك النهاردة يكفي! 👋</h2>
                    <p className="text-lg font-bold text-slate-500 leading-relaxed max-w-sm mx-auto">
-                      أنت وصلت للمستوى المطلوب وأنهيت تحدي الأسبوع. النهاردة إجازة رسمية من المختبر، استمتع بوقتك!
+                      أنت وصلت للمستوى المطلوب وأنهيت تحدي الأسبوع. النهاردة إجازة رسمية من Aura، استمتع بوقتك!
                    </p>
                 </div>
                 <button 
                   onClick={() => setTodayIsHoliday(false)}
                   className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-colors"
                 >
-                  رجوع للممعمل
+                  رجوع للمAura
                 </button>
+              </motion.div>
+            ) : activeTab === 'home' ? (
+              <motion.div 
+                key="home-view"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 1.05 }}
+                className="flex flex-col items-center justify-center py-10 min-h-[75vh] relative"
+              >
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-blue-500/10 dark:bg-blue-500/5 rounded-full blur-[100px] pointer-events-none" />
+                
+                <div className="relative w-[340px] h-[340px] sm:w-[420px] sm:h-[420px] flex items-center justify-center group">
+                  <div className="absolute inset-0 border-[2px] border-blue-200 dark:border-slate-700/50 rounded-full animate-[spin_40s_linear_infinite] border-dashed opacity-50" />
+                  <div className="absolute inset-8 border border-blue-500/20 dark:border-blue-500/20 rounded-full animate-[spin_60s_linear_infinite_reverse]" />
+                  <div className="absolute inset-16 border border-slate-200 dark:border-slate-800 rounded-full" />
+                  <div className="absolute inset-24 border border-blue-100/50 dark:border-slate-800/40 rounded-full animate-[ping_12s_cubic-bezier(0,0,0.2,1)_infinite]" />
+                  
+                  <motion.div 
+                    animate={{ scale: [1, 1.05, 1], boxShadow: ["0 0 40px rgba(37,99,235,0.2)", "0 0 80px rgba(37,99,235,0.4)", "0 0 40px rgba(37,99,235,0.2)"] }} 
+                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }} 
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center bg-gradient-to-tr from-blue-600 to-blue-500 rounded-full w-32 h-32 justify-center border border-blue-400/30"
+                  >
+                     <Target className="w-12 h-12 text-white mb-1" />
+                     <span className="text-[10px] font-black text-white uppercase tracking-[0.3em]">AURA</span>
+                  </motion.div>
+
+                  <button onClick={() => setActiveTab('habits')} className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-[0_10px_40px_-10px_rgba(37,99,235,0.2)] border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-blue-600 z-30 group/btn">
+                     <CheckCircle2 className="w-7 h-7 group-hover/btn:scale-110 transition-transform" />
+                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 group-hover/btn:text-blue-600 transition-colors">المهارات</span>
+                  </button>
+
+                  <button onClick={() => setActiveTab('analysis')} className="absolute top-1/2 right-0 translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-[0_10px_40px_-10px_rgba(147,51,234,0.2)] border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-purple-600 z-30 group/btn">
+                     <Activity className="w-7 h-7 group-hover/btn:scale-110 transition-transform" />
+                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 group-hover/btn:text-purple-600 transition-colors">المختبر</span>
+                  </button>
+
+                  <button onClick={() => setActiveTab('levels')} className="absolute top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-[0_10px_40px_-10px_rgba(202,138,4,0.2)] border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-yellow-600 z-30 group/btn">
+                     <Award className="w-7 h-7 group-hover/btn:scale-110 transition-transform" />
+                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 group-hover/btn:text-yellow-600 transition-colors">المسار</span>
+                  </button>
+
+                  <button onClick={() => setShowDashboard(true)} className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-xl border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-slate-600 dark:text-slate-300 z-30 group/btn">
+                     <Settings className="w-7 h-7 group-hover/btn:rotate-90 transition-transform" />
+                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 group-hover/btn:text-slate-800 dark:group-hover/btn:text-white transition-colors">الإعدادات</span>
+                  </button>
+                </div>
               </motion.div>
             ) : activeTab === 'analysis' ? (
               <motion.div
@@ -756,14 +896,14 @@ export default function App() {
                 className="space-y-8"
               >
                  <div className="p-10 rounded-[3.5rem] bg-slate-900 text-white shadow-2xl relative overflow-hidden text-right border border-slate-800">
-                    <div className="absolute -top-12 -right-12 w-64 h-64 bg-indigo-500/20 blur-[100px] rounded-full" />
+                    <div className="absolute -top-12 -right-12 w-64 h-64 bg-blue-500/20 blur-[100px] rounded-full" />
                   <div className="relative z-10 flex flex-col items-center gap-6">
-                     <span className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-400">الحالة الراهنة</span>
+                     <span className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-400">الحالة الراهنة</span>
                      <div className="text-center">
-                        <p className="text-sm font-black text-indigo-300 uppercase mb-2">{userTitle}</p>
+                        <p className="text-sm font-black text-blue-300 uppercase mb-2">{userTitle}</p>
                         <h2 className="text-6xl font-black tracking-tighter">Lvl {userLevel}</h2>
-                        <div className="mt-4 flex items-center justify-center gap-2 bg-indigo-500/20 px-4 py-2 rounded-2xl border border-indigo-500/30">
-                           <Award className="w-5 h-5 text-indigo-400" />
+                        <div className="mt-4 flex items-center justify-center gap-2 bg-blue-500/20 px-4 py-2 rounded-2xl border border-blue-500/30">
+                           <Award className="w-5 h-5 text-blue-400" />
                            <span className="text-xl font-black text-white font-mono">{points} Point</span>
                         </div>
                      </div>
@@ -771,7 +911,7 @@ export default function App() {
                         <motion.div 
                           initial={{ width: 0 }}
                           animate={{ width: `${levelProgress}%` }}
-                          className="h-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]"
+                          className="h-full bg-blue-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]"
                         />
                      </div>
                      <p className="text-xs font-bold text-slate-400">
@@ -782,12 +922,12 @@ export default function App() {
 
                <div className="mb-12">
                    {!weeklyChallenge ? (
-                     <div className="glass rounded-[2rem] p-10 border-2 border-indigo-500/10 shadow-2xl relative overflow-hidden bg-white/70 text-center group">
-                        <div className="absolute -top-12 -right-12 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-500/10 transition-colors" />
+                     <div className="glass rounded-[2rem] p-10 border-2 border-blue-500/10 shadow-2xl relative overflow-hidden bg-white/70 text-center group">
+                        <div className="absolute -top-12 -right-12 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl group-hover:bg-blue-500/10 transition-colors" />
                         <Trophy className="w-12 h-12 text-slate-300 mx-auto mb-6" />
                         <h3 className="text-lg font-black text-slate-800 mb-2">تحدى نفسك هذا الأسبوع</h3>
                         <p className="text-xs font-bold text-slate-400 mb-8 max-w-xs mx-auto">
-                          في المعمل، أنت من يصمم تحدياته. ابدأ بتعريف تحدي أسبوعي مخصص يناسب أهدافك الحالية.
+                          في Aura، أنت من يصمم تحدياته. ابدأ بتعريف تحدي أسبوعي مخصص يناسب أهدافك الحالية.
                         </p>
                         <button 
                           onClick={() => {
@@ -807,12 +947,12 @@ export default function App() {
                         </button>
                      </div>
                    ) : (
-                     <div className="glass rounded-[2rem] p-8 border-2 border-indigo-500/10 shadow-2xl relative overflow-hidden bg-white/70">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full -translate-y-16 translate-x-16" />
+                     <div className="glass rounded-[2rem] p-8 border-2 border-blue-500/10 shadow-2xl relative overflow-hidden bg-white/70">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -translate-y-16 translate-x-16" />
                         <div className="relative flex items-center justify-between mb-8">
                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-indigo-500 text-white flex items-center justify-center">
-                                 <Trophy className="w-5 h-5 shadow-lg shadow-indigo-500/40" />
+                              <div className="w-10 h-10 rounded-xl bg-blue-500 text-white flex items-center justify-center">
+                                 <Trophy className="w-5 h-5 shadow-lg shadow-blue-500/40" />
                               </div>
                               <div>
                                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">تحدي النقاط الأسبوعي</h3>
@@ -829,7 +969,7 @@ export default function App() {
           
                         <div className="space-y-6">
                            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                              <div className="flex items-center gap-2 text-indigo-500 mb-2">
+                              <div className="flex items-center gap-2 text-blue-500 mb-2">
                                  <ArrowRight className="w-3.5 h-3.5" />
                                  <span className="text-[10px] font-black uppercase tracking-widest">الهدف الحالي</span>
                               </div>
@@ -839,21 +979,21 @@ export default function App() {
                            <div className="space-y-3">
                               <div className="flex justify-between items-baseline px-2">
                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">نقاط الأسبوع</span>
-                                 <span className="text-2xl font-black text-indigo-600 font-mono tracking-tighter">{weeklyChallenge.progress}/{weeklyChallenge.target}</span>
+                                 <span className="text-2xl font-black text-blue-600 font-mono tracking-tighter">{weeklyChallenge.progress}/{weeklyChallenge.target}</span>
                               </div>
                               <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden p-0.5">
                                  <motion.div 
                                    initial={{ width: 0 }}
                                    animate={{ width: `${(weeklyChallenge.progress / weeklyChallenge.target) * 100}%` }}
-                                   className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 rounded-full"
+                                   className="h-full bg-gradient-to-r from-blue-500 via-blue-500 to-blue-500 rounded-full"
                                    transition={{ type: "spring", damping: 15 }}
                                  />
                               </div>
                            </div>
           
-                           <div className={`p-5 rounded-3xl border-2 transition-all flex items-center justify-between ${weeklyChallenge.progress >= weeklyChallenge.target ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-slate-50 border-transparent text-slate-400'}`}>
+                           <div className={`p-5 rounded-3xl border-2 transition-all flex items-center justify-between ${weeklyChallenge.progress >= weeklyChallenge.target ? 'bg-blue-50 border-blue-100 text-blue-600' : 'bg-slate-50 border-transparent text-slate-400'}`}>
                               <div className="flex items-center gap-3">
-                                 <div className={`p-2 rounded-xl ${weeklyChallenge.progress >= weeklyChallenge.target ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                                 <div className={`p-2 rounded-xl ${weeklyChallenge.progress >= weeklyChallenge.target ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
                                     <Gift className="w-4 h-4" />
                                  </div>
                                  <div>
@@ -862,7 +1002,7 @@ export default function App() {
                                  </div>
                               </div>
                               {weeklyChallenge.progress >= weeklyChallenge.target && (
-                                <Sparkles className="w-5 h-5 text-emerald-500 animate-spin-slow" />
+                                <Sparkles className="w-5 h-5 text-blue-500 animate-spin-slow" />
                               )}
                            </div>
                         </div>
@@ -880,7 +1020,7 @@ export default function App() {
                                      type="text"
                                      value={weeklyChallenge.goal}
                                      onChange={e => setWeeklyChallenge({...weeklyChallenge, goal: e.target.value})}
-                                     className="w-full bg-slate-100 p-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 text-xs font-bold"
+                                     className="w-full bg-slate-100 p-4 rounded-xl border border-slate-200 outline-none focus:border-blue-500 text-xs font-bold"
                                    />
                                 </label>
                                 <label className="block">
@@ -889,7 +1029,7 @@ export default function App() {
                                      type="text"
                                      value={weeklyChallenge.reward}
                                      onChange={e => setWeeklyChallenge({...weeklyChallenge, reward: e.target.value})}
-                                     className="w-full bg-slate-100 p-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 text-xs font-bold"
+                                     className="w-full bg-slate-100 p-4 rounded-xl border border-slate-200 outline-none focus:border-blue-500 text-xs font-bold"
                                    />
                                 </label>
                                 <div className="grid grid-cols-2 gap-4">
@@ -899,7 +1039,7 @@ export default function App() {
                                         type="number"
                                         value={weeklyChallenge.target}
                                         onChange={e => setWeeklyChallenge({...weeklyChallenge, target: parseInt(e.target.value) || 1})}
-                                        className="w-full bg-slate-100 p-4 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 text-xs font-bold"
+                                        className="w-full bg-slate-100 p-4 rounded-xl border border-slate-200 outline-none focus:border-blue-500 text-xs font-bold"
                                       />
                                    </label>
                                    <div className="flex items-end gap-2">
@@ -908,16 +1048,16 @@ export default function App() {
                                           setConfirmAction({
                                             title: 'حذف التحدي؟',
                                             description: 'سيتم مسح سجلات المستوى الحالي ونقاط الأسبوع. هل أنت متأكد؟',
-                                            icon: <Trash2 className="w-12 h-12 text-rose-500 mb-6 mx-auto" />,
+                                            icon: <Trash2 className="w-12 h-12 text-blue-500 mb-6 mx-auto" />,
                                             onConfirm: () => {
                                               setWeeklyChallenge(null);
                                               setShowChallengeEdit(false);
                                               setConfirmAction(null);
-                                              showFeedback('تم حذف العادة من السجل الأسبوعي.', 'alert');
+                                              showFeedback('تم حذف المهارة من السجل الأسبوعي.', 'alert');
                                             }
                                           });
                                         }}
-                                        className="flex-1 h-[48px] bg-rose-50 text-rose-500 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-100"
+                                        className="flex-1 h-[48px] bg-blue-50 text-blue-500 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-100"
                                       >
                                         حذف التحدي
                                       </button>
@@ -926,7 +1066,7 @@ export default function App() {
                                           setShowChallengeEdit(false);
                                           showFeedback('تم تحديث بيانات التحدي بنجاح! ✨');
                                         }}
-                                        className="flex-1 h-[48px] bg-indigo-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 shadow-lg shadow-indigo-500/20"
+                                        className="flex-1 h-[48px] bg-blue-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 shadow-lg shadow-blue-500/20"
                                       >
                                         تحديث
                                       </button>
@@ -940,9 +1080,9 @@ export default function App() {
                </div>
                <div className="grid grid-cols-1 gap-4 text-right">
                   {USER_RANKS.slice(0, userLevel + 5).map((rank, i) => (
-                    <div key={`rank-v2-${i}`} className={`p-6 rounded-[2rem] border transition-all flex items-center justify-between ${i < userLevel - 1 ? 'bg-emerald-50 border-emerald-100' : i === userLevel - 1 ? 'bg-indigo-50 border-indigo-200 shadow-lg' : 'bg-slate-50 border-slate-100 opacity-40'}`}>
+                    <div key={`rank-v2-${i}`} className={`p-6 rounded-[2rem] border transition-all flex items-center justify-between ${i < userLevel - 1 ? 'bg-blue-50 border-blue-100' : i === userLevel - 1 ? 'bg-blue-50 border-blue-200 shadow-lg' : 'bg-slate-50 border-slate-100 opacity-40'}`}>
                        <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black ${i < userLevel - 1 ? 'bg-emerald-500 text-white' : i === userLevel - 1 ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black ${i < userLevel - 1 ? 'bg-blue-500 text-white' : i === userLevel - 1 ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-400'}`}>
                              {i + 1}
                           </div>
                           <div className="text-right">
@@ -950,10 +1090,108 @@ export default function App() {
                              <p className="text-xs font-black text-slate-800">{rank}</p>
                           </div>
                        </div>
-                       {i < userLevel - 1 && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
+                       {i < userLevel - 1 && <CheckCircle2 className="w-5 h-5 text-blue-500" />}
                     </div>
                   ))}
                </div>
+            </motion.div>
+          ) : activeTab === 'privacy' ? (
+            <motion.div 
+              key="privacy-view"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="max-w-2xl mx-auto px-2"
+            >
+              <div className="flex items-center justify-between mb-16">
+                <div />
+                <div className="text-right">
+                   <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+                    سياسة الخصوصية
+                  </h2>
+                  <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-1">Aura Protocol</p>
+                </div>
+              </div>
+
+              <div className="space-y-12 text-right">
+                <section className="space-y-6">
+                  <div className="flex items-center gap-3 justify-end text-blue-500">
+                    <h3 className="text-xl font-black uppercase tracking-tight">أمانك هو وقودنا</h3>
+                    <Shield className="w-6 h-6" />
+                  </div>
+                  <p className="text-base font-bold text-slate-600 dark:text-slate-400 leading-relaxed">
+                    خصوصية بياناتك ليست مجرد ميزة في Aura، بل هي حجر الأساس الذي بنينا عليه التطبيق. نحن لا نجمع بياناتك ولا نعرف من أنت، هدفنا فقط هو تحويلك لأفضل نسخة من نفسك.
+                  </p>
+                </section>
+
+                <section className="space-y-6 p-10 bg-slate-50 dark:bg-slate-800/50 rounded-[3rem] border border-slate-100 dark:border-slate-800 relative overflow-hidden shadow-sm">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-3xl rounded-full" />
+                  <h4 className="font-black text-lg text-slate-800 dark:text-white">أين تذهب بياناتك؟</h4>
+                  <div className="space-y-6">
+                     <div className="flex items-start gap-4 justify-end">
+                        <p className="text-sm font-bold text-slate-500">يتم تخزين بياناتك محلياً على جهازك فقط بشكل مشفر تماماً.</p>
+                        <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                     </div>
+                     <div className="flex items-start gap-4 justify-end">
+                        <p className="text-sm font-bold text-slate-500">نحن لا نملك خوادم مركزية تجمع بيانات المستخدمين أو تبيعها.</p>
+                        <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                     </div>
+                     <div className="flex items-start gap-4 justify-end">
+                        <p className="text-sm font-bold text-slate-500">عند تفعيل Google Drive، تنتقل البيانات من جهازك لمساحتك الخاصة مباشرة دون المرور بنا.</p>
+                        <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                     </div>
+                  </div>
+                </section>
+
+                <section className="space-y-6">
+                  <div className="flex items-center gap-3 justify-end text-blue-500">
+                    <h3 className="text-xl font-black uppercase tracking-tight">تكامل الخدمات السحابية</h3>
+                    <Cloud className="w-6 h-6" />
+                  </div>
+                  <p className="text-base font-bold text-slate-600 dark:text-slate-400 leading-relaxed">
+                    عند ربط Aura بحساب Google الخاص بك، فإننا نطلب أذونات محددة جداً لضمان أفضل تجربة مستخدم دون التعدي على مساحتك الشخصية.
+                  </p>
+                </section>
+
+                <section className="space-y-10">
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 justify-end">
+                      <span className="text-xs font-black text-blue-500 uppercase tracking-widest">Google Drive</span>
+                      <div className="h-px flex-1 bg-slate-100 dark:bg-slate-800" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-500 leading-relaxed">
+                      نحن نستخدم "App Data Folder"، وهو مكان مخصص للتطبيق لا يمكنك رؤيته يدوياً ولا يمكن لتطبيقات أخرى الوصول إليه. نحن لا نرى ملفاتك أو صورك الأخرى أبداً.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 justify-end">
+                      <span className="text-xs font-black text-blue-500 uppercase tracking-widest">Google Calendar</span>
+                      <div className="h-px flex-1 bg-slate-100 dark:bg-slate-800" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-500 leading-relaxed">
+                      نستخدم التقويم فقط لإرسال "إشعارات ذكية" لمهاراتك وتنبيهك عند اقتراب وقت الهدف. نحن نعدل فقط الأحداث التي أنشأها التطبيق، ولا نطلع على جدولك اليومي الخاص.
+                    </p>
+                  </div>
+                </section>
+
+                <section className="space-y-6">
+                  <h4 className="font-black text-slate-800 dark:text-white text-lg">التزاماتنا</h4>
+                  <p className="text-sm font-bold text-slate-500 leading-relaxed italic border-r-4 border-blue-500 pr-6">
+                    "نحن نلتزم بالحياد التام تجاه بياناتك. أنت المتحكم الوحيد في مسارك الإنمائي."
+                  </p>
+                </section>
+
+                <div className="p-8 bg-blue-50 dark:bg-blue-900/10 rounded-3xl border border-blue-100 dark:border-blue-900/30">
+                  <p className="text-xs font-black text-blue-600 dark:text-blue-400 text-center leading-relaxed">
+                    يمكنك دائماً مراجعة الأذونات الممنوحة للتطبيقات من خلال لوحة تحكم حساب Google الخاص بك وإلغاؤها في أي وقت.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mt-32 pt-8 border-t border-slate-100 dark:border-slate-800 flex justify-center">
+                <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.6em]">Designed with Privacy in Mind • Aura Labs</p>
+              </div>
             </motion.div>
           ) : (
             <motion.div 
@@ -967,7 +1205,7 @@ export default function App() {
               <div className="mb-4 pl-12 flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <span className="text-sm font-bold text-indigo-500 dark:text-indigo-400">{selectedDate === new Date().toISOString().split('T')[0] ? 'النهاردة' : selectedDate}</span>
+                    <span className="text-sm font-bold text-blue-500 dark:text-blue-400">{selectedDate === new Date().toISOString().split('T')[0] ? 'النهاردة' : selectedDate}</span>
                     <div className="h-px w-8 bg-slate-200 dark:bg-slate-700" />
                   </div>
                   <div className="flex gap-2">
@@ -1000,8 +1238,8 @@ export default function App() {
                       type="text" 
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="ابحث في العادات.."
-                      className="w-full bg-white dark:bg-slate-800 text-right pr-12 pl-4 py-3 rounded-2xl border border-slate-100 dark:border-slate-700 text-sm font-bold outline-none focus:border-indigo-500 dark:text-slate-200 transition-all shadow-sm"
+                      placeholder="ابحث في المهارات.."
+                      className="w-full bg-white dark:bg-slate-800 text-right pr-12 pl-4 py-3 rounded-2xl border border-slate-100 dark:border-slate-700 text-sm font-bold outline-none focus:border-blue-500 dark:text-slate-200 transition-all shadow-sm"
                     />
                   </div>
                 )}
@@ -1009,12 +1247,12 @@ export default function App() {
 
               {habits.length === 0 ? (
                 <div className="pl-12 py-20 flex flex-col items-center justify-center text-center">
-                  <div className="w-20 h-20 bg-indigo-50 dark:bg-indigo-900/20 rounded-[2rem] flex items-center justify-center mb-6">
-                    <Sparkles className="w-8 h-8 text-indigo-500" />
+                  <div className="w-20 h-20 bg-blue-50 dark:bg-blue-900/20 rounded-[2rem] flex items-center justify-center mb-6">
+                    <Sparkles className="w-8 h-8 text-blue-500" />
                   </div>
-                  <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-2">أهلاً بيك في معمل العادات!</h3>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 mb-2">أهلاً بيك في Aura!</h3>
                   <p className="text-sm font-bold text-slate-500 dark:text-slate-400 max-w-[250px] leading-relaxed mb-12">
-                    المعمل فاضي مفيش فيه أي عادات لسه.. دوس على الزرار تحت عشان تبدأ رحلتك.
+                    Aura فاضي مفيش فيه أي مهارات لسه.. دوس على الزرار تحت عشان تبدأ رحلتك.
                   </p>
                   
                   <div className="relative mt-8">
@@ -1023,7 +1261,7 @@ export default function App() {
                       transition={{ duration: 2, repeat: Infinity }}
                       className="absolute -bottom-20 right-8 md:right-1/2"
                     >
-                      <svg width="60" height="80" viewBox="0 0 60 80" fill="none" className="text-indigo-300 dark:text-indigo-700 stroke-current drop-shadow-md">
+                      <svg width="60" height="80" viewBox="0 0 60 80" fill="none" className="text-blue-300 dark:text-blue-700 stroke-current drop-shadow-md">
                         <path d="M50 0 C 50 40, 10 40, 10 70 M 10 70 L 2 60 M 10 70 L 18 60" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
                     </motion.div>
@@ -1031,7 +1269,7 @@ export default function App() {
                 </div>
               ) : filteredHabits.length === 0 ? (
                 <div className="pl-12 py-20 text-center text-slate-300">
-                  <p className="text-xs font-medium italic">مافيش عادات في الفئة دي للمعمل..</p>
+                  <p className="text-xs font-medium italic">مافيش مهارات في الفئة دي للAura..</p>
                 </div>
               ) : (
                 filteredHabits.map(habit => (
@@ -1043,6 +1281,8 @@ export default function App() {
                     onEdit={handleEdit}
                     onDelete={() => handleDelete(habit.id)}
                     onToggleRecovery={toggleHabitRecovery}
+                    onRelapse={handleRelapse}
+                    onIconClick={(icon, name) => setZoomIcon({ icon, name })}
                   />
                 ))
               )}
@@ -1054,7 +1294,7 @@ export default function App() {
             <div className="flex flex-wrap justify-center gap-4">
               <button 
                 onClick={handleShare}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-white border border-indigo-500 text-indigo-600 font-bold text-xs shadow-lg shadow-indigo-500/5 hover:bg-indigo-50 hover:scale-105 active:scale-95 transition-all"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-white border border-blue-500 text-blue-600 font-bold text-xs shadow-lg shadow-blue-500/5 hover:bg-blue-50 hover:scale-105 active:scale-95 transition-all"
               >
                 <Share2 className="w-4 h-4" />
                 مشاركة 🚀
@@ -1062,7 +1302,7 @@ export default function App() {
               
               <button 
                 onClick={() => setShowSupport(true)}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-amber-500 text-white font-bold text-xs shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all"
               >
                 <Coffee className="w-4 h-4" />
                 ادعمنا ☕
@@ -1070,7 +1310,7 @@ export default function App() {
 
               <button 
                 onClick={() => window.open('https://forms.gle/FC8RuWBEkR7m5tzt9', '_blank')}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-all"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all"
               >
                 <Sparkles className="w-4 h-4" />
                 قيمنا ⭐
@@ -1099,7 +1339,7 @@ export default function App() {
                  exit={{ scale: 0.9, opacity: 0, y: 20 }}
                  className="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-[3rem] p-10 shadow-2xl overflow-hidden border border-slate-100 dark:border-slate-800"
                >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 dark:bg-indigo-900/10 rounded-full blur-3xl -translate-y-16 translate-x-16" />
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 dark:bg-blue-900/10 rounded-full blur-3xl -translate-y-16 translate-x-16" />
                   
                   {confirmAction.icon}
                   
@@ -1115,7 +1355,7 @@ export default function App() {
                      </button>
                      <button 
                        onClick={confirmAction.onConfirm} 
-                       className="py-4 bg-indigo-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-500/25 hover:bg-indigo-600 transition-colors"
+                       className="py-4 bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-500/25 hover:bg-blue-600 transition-colors"
                      >
                        تأكيد الإجراء
                      </button>
@@ -1130,9 +1370,9 @@ export default function App() {
               animate={{ opacity: 1, y: 0, x: '-50%' }}
               exit={{ opacity: 0, scale: 0.9, x: '-50%' }}
               className={`fixed bottom-8 left-1/2 z-[100] px-8 py-4 rounded-3xl shadow-2xl font-black text-[11px] uppercase tracking-widest flex items-center gap-4 border-2 transition-all glass-shine ${(feedback as any).type === 'success' 
-                  ? 'bg-emerald-500 text-white border-emerald-400' 
+                  ? 'bg-blue-500 text-white border-blue-400' 
                   : (feedback as any).type === 'alert'
-                  ? 'bg-rose-500 text-white border-rose-400'
+                  ? 'bg-blue-500 text-white border-blue-400'
                   : 'bg-slate-900 text-white border-slate-700'
               }`}
             >
@@ -1171,16 +1411,16 @@ export default function App() {
                          exit={{ scale: 0.9, opacity: 0, y: 20 }}
                          className="relative w-full max-w-lg bg-white rounded-[3rem] p-10 shadow-2xl overflow-hidden border border-slate-100"
                        >
-                          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-50 rounded-full blur-3xl -translate-y-16 translate-x-16" />
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full blur-3xl -translate-y-16 translate-x-16" />
                           
-                          <Sparkles className="w-16 h-16 text-amber-500 mb-6 mx-auto animate-pulse" />
+                          <Sparkles className="w-16 h-16 text-blue-500 mb-6 mx-auto animate-pulse" />
                           
                           <h3 className="text-2xl font-black text-slate-900 mb-4">شارك في بناء Habit Lab 🚀</h3>
                           <div className="space-y-4 text-xs font-bold text-slate-500 leading-relaxed mb-8">
-                             <p>"لو تطبيق habit lab ساعدك تنظم يومك وتبنى عاداتك بدل التشتت تقدر تدعم استمرار المشروع وتطوير ميزات جديدة بمبلغ رمزي. دعمك هو اللي بيخلينا نكبر ونقدم كود أنضف وتجربة أحسن."</p>
+                             <p>"لو تطبيق habit lab ساعدك تنظم يومك وتبنى مهاراتك بدل التشتت تقدر تدعم استمرار المشروع وتطوير ميزات جديدة بمبلغ رمزي. دعمك هو اللي بيخلينا نكبر ونقدم كود أنضف وتجربة أحسن."</p>
                              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 space-y-3">
                                 <p className="text-slate-800 font-black">طريقة الدعم (فودافون كاش):</p>
-                                <p className="text-lg font-black text-indigo-600 font-mono">01282920387 :حول مباشرة على رقم</p>
+                                <p className="text-lg font-black text-blue-600 font-mono">01282920387 :حول مباشرة على رقم</p>
                                 <p>خد سكرين شوت وابعتها لينا [ واتساب ] وبكدا هتبقى شاركت ف بناء البرنامج</p>
                              </div>
                           </div>
@@ -1188,7 +1428,7 @@ export default function App() {
                           <div className="grid grid-cols-1">
                              <button 
                                onClick={() => setShowSupport(false)} 
-                               className="py-4 bg-indigo-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-500/25 hover:bg-indigo-600 transition-colors"
+                               className="py-4 bg-blue-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-500/25 hover:bg-blue-600 transition-colors"
                              >
                                تم، شكراً لدعمكم! ❤️
                              </button>
@@ -1200,10 +1440,19 @@ export default function App() {
         </div>
       </main>
 
-      {activeTab !== 'analysis' && (
+      {activeTab !== 'home' && (
+        <button 
+          onClick={() => setActiveTab('home')}
+          className="fixed top-6 right-6 sm:top-10 sm:right-10 w-12 h-12 bg-white dark:bg-slate-900 text-slate-800 dark:text-white rounded-2xl flex items-center justify-center shadow-xl hover:scale-110 active:scale-90 transition-all z-50 border border-slate-100 dark:border-slate-800"
+        >
+          <Target className="w-6 h-6" />
+        </button>
+      )}
+
+      {activeTab !== 'analysis' && activeTab !== 'home' && activeTab !== 'privacy' && (
         <button 
           onClick={() => setShowModal(true)}
-          className="fixed bottom-10 right-10 w-16 h-16 bg-gradient-to-tr from-indigo-500 via-purple-600 to-pink-500 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-90 transition-all z-50 group border-2 border-white/20 glass-shine btn-hover-scale"
+          className="fixed bottom-10 right-10 w-16 h-16 bg-gradient-to-tr from-blue-500 via-blue-600 to-blue-500 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-90 transition-all z-50 group border-2 border-white/20 glass-shine btn-hover-scale"
         >
           <Plus className="w-8 h-8 group-hover:rotate-90 transition-transform duration-500" />
         </button>

@@ -5,5 +5,5 @@ export async function getMotivationalMessage(habit: Habit, note?: string) {
 }
 
 export async function getProgressSummary(habits: Habit[]) {
-  return "أنت تحقق تقدماً ملحوظاً في عاداتك.";
+  return "أنت تحقق تقدماً ملحوظاً في مهاراتك.";
 }
