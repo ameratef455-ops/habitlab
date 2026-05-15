@@ -5,11 +5,18 @@ export interface AppData {
   habits: Habit[];
   points: number;
   weeklyChallenge: WeeklyChallenge | null;
+  scheduleTasks?: any;
+  plannerData?: any;
+  generalNotes?: any[];
+  focusSessions?: any[];
+  dreamSessions?: any[];
+  globalRecoveryMode?: boolean;
+  todayIsHoliday?: boolean;
   timestamp: number;
 }
 
 const CLIENT_ID = '561357148109-h9jvtvark5evfh9kmqb3feavp5fu2bbm.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.profile';
 const DISCOVERY_DOCS = [
   'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
   'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'
@@ -25,6 +32,7 @@ export function useGoogleDriveSync(
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('Offline');
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [userProfile, setUserProfile] = useState<{name?: string, picture?: string} | null>(null);
   
   const tokenClientRef = useRef<google.accounts.oauth2.TokenClient | null>(null);
   const currentDataRef = useRef(currentData);
@@ -53,6 +61,20 @@ export function useGoogleDriveSync(
     });
   }, []);
 
+  const fetchUserProfile = async (accessToken: string) => {
+    try {
+      const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (res.ok) {
+        const userInfo = await res.json();
+        setUserProfile({ name: userInfo.given_name || userInfo.name, picture: userInfo.picture });
+      }
+    } catch (e) {
+      console.warn("Failed to fetch user profile", e);
+    }
+  };
+
   const handleAuthResult = useCallback(async (tokenResponse: google.accounts.oauth2.TokenResponse) => {
     if (tokenResponse && tokenResponse.access_token) {
       localStorage.setItem('gapi_access_token', tokenResponse.access_token);
@@ -60,6 +82,7 @@ export function useGoogleDriveSync(
       localStorage.setItem('gapi_is_auto_sync_enabled', 'true');
       
       setIsSignedIn(true);
+      fetchUserProfile(tokenResponse.access_token);
       if (typeof gapi !== 'undefined' && gapi.client) {
          gapi.client.setToken({ access_token: tokenResponse.access_token });
       }
@@ -127,6 +150,7 @@ export function useGoogleDriveSync(
           if (cachedToken && expiresAt && Date.now() < Number(expiresAt)) {
              gapi.client.setToken({ access_token: cachedToken });
              setIsSignedIn(true);
+             fetchUserProfile(cachedToken);
              syncDriveFileSync().then(() => setIsInitializing(false));
           } else if (isAutoSync === 'true') {
              // Token expired, use Silent Prompt to re-auth without popup
@@ -251,26 +275,41 @@ export function useGoogleDriveSync(
     }
   };
 
-  // Debounced uploading
+  // Debounced uploading with inactivity check
   useEffect(() => {
     // Skip on first mount / before first load from remote
     if (isFirstLoadRef.current || !isSignedIn) return;
 
-    setSyncStatus('Syncing...');
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
-    debounceTimerRef.current = setTimeout(() => {
-       uploadToDrive(false);
-    }, 10000); // 10 seconds
-
-    return () => {
-      if (debounceTimerRef.current) {
-         clearTimeout(debounceTimerRef.current);
-      }
+    const startTimer = () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      
+      debounceTimerRef.current = setTimeout(() => {
+         setSyncStatus('Syncing...');
+         uploadToDrive(false);
+      }, 10000); // 10 seconds of pure inactivity
     };
-  }, [JSON.stringify(currentData), isSignedIn]); // Depend on stringified data to check actual changes
 
-  return { syncStatus, isSignedIn, signIn, logout, deleteSyncData, isInitializing };
+    // Reset timer on data change
+    startTimer();
+
+    const handleInactivityAndActivity = () => {
+       // On any user movement, if the timer is running, push it back
+       if (debounceTimerRef.current) {
+         startTimer();
+       }
+    };
+
+    window.addEventListener('mousemove', handleInactivityAndActivity);
+    window.addEventListener('keydown', handleInactivityAndActivity);
+    window.addEventListener('touchstart', handleInactivityAndActivity);
+    
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      window.removeEventListener('mousemove', handleInactivityAndActivity);
+      window.removeEventListener('keydown', handleInactivityAndActivity);
+      window.removeEventListener('touchstart', handleInactivityAndActivity);
+    };
+  }, [JSON.stringify(currentData), isSignedIn]);
+
+  return { syncStatus, isSignedIn, signIn, logout, deleteSyncData, isInitializing, userProfile };
 }

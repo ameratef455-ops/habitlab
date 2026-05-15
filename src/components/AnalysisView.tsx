@@ -49,6 +49,8 @@ interface AnalysisViewProps {
   points: number;
   userLevel: number;
   userTitle: string;
+  focusSessions?: any[];
+  dreamSessions?: any[];
 }
 
 export const AnalysisView: React.FC<AnalysisViewProps> = ({
@@ -56,11 +58,26 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
   points,
   userLevel,
   userTitle,
+  focusSessions = [],
+  dreamSessions = [],
 }) => {
   const [showInfo, setShowInfo] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<
-    "chart" | "achievements" | "averages"
+    "chart" | "achievements" | "averages" | "sessions" | "relapses"
   >("chart");
+
+  const relapsesData = useMemo(() => {
+    return habits
+      .filter((h) => h.relapses && h.relapses.length > 0)
+      .flatMap((h) =>
+        h.relapses!.map((r) => ({
+          ...r,
+          habitName: h.name,
+          habitIcon: h.icon,
+        }))
+      )
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [habits]);
 
   // Calculate Average Focus Score
   const averageFocusScore = useMemo(() => {
@@ -209,18 +226,20 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
       </div>
 
       {/* Sub Tabs Navigation */}
-      <div className="flex bg-slate-100 p-1 rounded-2xl">
+      <div className="flex bg-slate-100 p-1 rounded-2xl overflow-x-auto no-scrollbar">
         {[
           { id: "chart", label: "الإحصائيات" },
           { id: "achievements", label: "الإنجازات" },
           { id: "averages", label: "ملخص المهارات" },
+          { id: "sessions", label: "جلسات العمل" },
+          { id: "relapses", label: "الوقعات ⚠️" },
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() =>
-              setActiveSubTab(tab.id as "chart" | "achievements" | "averages")
+              setActiveSubTab(tab.id as any)
             }
-            className={`flex-1 py-3 text-xs font-black rounded-xl transition-all relative ${
+            className={`flex-1 min-w-[80px] py-3 text-xs font-black rounded-xl transition-all relative ${
               activeSubTab === tab.id
                 ? "text-blue-600 shadow-md bg-white"
                 : "text-slate-400 hover:text-slate-600"
@@ -230,6 +249,180 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
           </button>
         ))}
       </div>
+
+      {activeSubTab === "relapses" && (
+        <motion.div
+           initial={{ opacity: 0, scale: 0.95 }}
+           animate={{ opacity: 1, scale: 1 }}
+           className="space-y-8 pt-6 text-right"
+        >
+          <div className="flex items-center justify-between mb-8 flex-row-reverse px-2">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-black text-slate-800">سجل الوقعات (Relapses)</h2>
+              <div className="w-10 h-10 rounded-2xl bg-red-500 flex items-center justify-center text-white">
+                <LucideIcons.AlertTriangle className="w-5 h-5" />
+              </div>
+            </div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">تعلّم من العثرات</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {relapsesData.map((relapse, idx) => (
+              <div key={`relapse-${idx}`} className="p-8 bg-white dark:bg-slate-900 rounded-[3rem] border border-red-50 shadow-xl shadow-red-500/5 relative overflow-hidden group">
+                 <div className="absolute top-0 left-0 w-2 h-full bg-red-500/20" />
+                 
+                 <div className="flex justify-between items-center mb-6">
+                    <span className="text-[10px] font-bold text-slate-400">{new Date(relapse.date).toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+                    <div className="flex items-center gap-2">
+                       <span className="text-xs font-black text-slate-800">{relapse.habitName}</span>
+                       <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-500">
+                          {React.createElement((LucideIcons as any)[relapse.habitIcon] || LucideIcons.Target, { className: "w-4 h-4" })}
+                       </div>
+                    </div>
+                 </div>
+
+                 <div className="bg-red-50/50 dark:bg-red-900/10 p-6 rounded-[2rem] border border-red-100 dark:border-red-900/30">
+                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-3">سبب الوقعة:</p>
+                    <p className="text-sm font-bold text-red-700 dark:text-red-300 leading-relaxed italic">
+                      "{relapse.reason}"
+                    </p>
+                 </div>
+
+                 <div className="mt-6 flex items-center gap-2 justify-end text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                    <LucideIcons.ShieldCheck className="w-3 h-3 text-emerald-500" />
+                    <span>كل وقعة هي خطوة نحو وعي أكبر</span>
+                 </div>
+              </div>
+            ))}
+
+            {relapsesData.length === 0 && (
+              <div className="col-span-full py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center text-slate-300">
+                 <LucideIcons.Sun className="w-12 h-12 mb-4 opacity-20" />
+                 <p className="text-sm font-black uppercase tracking-widest">لا توجد وقعات مسجلة.. أنت بطل!</p>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {activeSubTab === "sessions" && (
+        <motion.div
+           initial={{ opacity: 0, y: 10 }}
+           animate={{ opacity: 1, y: 0 }}
+           className="space-y-8 pt-6 text-right"
+        >
+          {/* Focus Sessions Segment */}
+          <div className="space-y-4">
+             <div className="flex items-center justify-between mb-4 flex-row-reverse">
+                <div className="flex items-center gap-2">
+                   <h2 className="text-xl font-black text-slate-800">Aura Focus 🧘‍♀️</h2>
+                   <Zap className="w-5 h-5 text-blue-500" />
+                </div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{focusSessions.length} جلسة</span>
+             </div>
+             
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+               {focusSessions.slice().reverse().map((session, i) => (
+                 <div key={session.id || `f-${i}`} className="bg-slate-50 border border-slate-100 rounded-2xl p-5 shadow-sm space-y-3">
+                    <div className="flex justify-between items-center mb-2">
+                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Date(session.endTime).toLocaleDateString('ar-EG', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
+                       <span className="bg-blue-100/50 text-blue-600 px-3 py-1 rounded-full text-xs font-black">{session.task}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-center pt-2 border-t border-slate-100">
+                       <div className="bg-slate-100/50 p-3 rounded-xl">
+                         <p className="text-[10px] font-black uppercase text-slate-400 mb-1">المتوقع</p>
+                         <p className="text-xl font-bold text-slate-700">{session.expectedMinutes}m</p>
+                       </div>
+                       <div className={`p-3 rounded-xl ${session.actualMinutes >= session.expectedMinutes ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+                         <p className="text-[10px] font-black uppercase opacity-60 mb-1">الفعلي</p>
+                         <p className="text-xl font-bold">{session.actualMinutes}m</p>
+                       </div>
+                    </div>
+                     {session.sessionFeedback && (
+                      <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50 relative overflow-hidden">
+                         <LucideIcons.Quote className="absolute top-2 left-2 w-4 h-4 text-blue-100" />
+                         <p className="text-xs font-bold text-blue-800 leading-relaxed pr-2">
+                            {session.sessionFeedback}
+                         </p>
+                      </div>
+                    )}
+                    {session.note && (
+                      <p className="text-xs font-bold text-slate-500 mt-2 bg-white p-3 rounded-xl border border-slate-100 italic line-clamp-3">
+                        {session.note}
+                      </p>
+                    )}
+                 </div>
+               ))}
+               {focusSessions.length === 0 && (
+                 <div className="col-span-full h-32 flex flex-col items-center justify-center text-slate-300 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-100">
+                    <Zap className="w-8 h-8 mb-2 opacity-20" />
+                    <p className="text-xs font-bold">لا يوجد سجل جلسات تركيز</p>
+                 </div>
+               )}
+             </div>
+          </div>
+
+          {/* Dream Sessions Segment */}
+          <div className="space-y-4 pt-8 border-t border-slate-100 text-right">
+             <div className="flex items-center justify-between mb-4 flex-row-reverse">
+                <div className="flex items-center gap-2">
+                   <h2 className="text-xl font-black text-slate-800">Aura Dreams 🎨</h2>
+                   <LucideIcons.Brush className="w-5 h-5 text-purple-500" />
+                </div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{dreamSessions.length} جلسة</span>
+             </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+               {dreamSessions.slice().reverse().map((session, i) => (
+                 <div key={session.id || `d-${i}`} className="bg-slate-50 border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4 overflow-hidden group">
+                    <div className="flex justify-between items-center px-1">
+                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Date(session.timestamp || Date.now()).toLocaleDateString('ar-EG', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
+                       <div className="flex items-center gap-1 bg-purple-100/50 text-purple-600 px-3 py-1 rounded-full text-xs font-black">
+                          <Clock className="w-3 h-3" />
+                          <span>{session.duration || 0} دقيقة</span>
+                       </div>
+                    </div>
+
+                    {session.notes && (
+                      <div className="bg-white p-4 rounded-xl border border-slate-100 relative">
+                         <LucideIcons.Quote className="absolute top-2 left-2 w-4 h-4 text-purple-100" />
+                         <p className="text-xs font-bold text-slate-600 leading-relaxed pr-2">
+                            {session.notes}
+                         </p>
+                      </div>
+                    )}
+
+                    {session.reflection && (
+                       <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100/50">
+                          <p className="text-[10px] font-black uppercase text-purple-400 mb-2">ما وصلت إليه (Reflection):</p>
+                          <p className="text-xs font-bold text-purple-700 italic">"{session.reflection}"</p>
+                       </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100/50">
+                       <div className="flex items-center gap-1 text-[10px] font-black text-emerald-500 uppercase">
+                          <LucideIcons.Award className="w-3 h-3" />
+                          <span>+{session.points || 0} XP</span>
+                       </div>
+                       {session.canvasImage && (
+                          <div className="text-[10px] font-black text-purple-300 uppercase tracking-widest flex items-center gap-1">
+                             <LucideIcons.Image className="w-3 h-3" />
+                             صورة محفوظة
+                          </div>
+                       )}
+                    </div>
+                 </div>
+               ))}
+               {dreamSessions.length === 0 && (
+                 <div className="col-span-full h-32 flex flex-col items-center justify-center text-slate-300 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-100">
+                    <LucideIcons.Brush className="w-8 h-8 mb-2 opacity-20" />
+                    <p className="text-xs font-bold">ابدأ برسم أحلامك في Aura Dreams</p>
+                 </div>
+               )}
+             </div>
+          </div>
+        </motion.div>
+      )}
 
       {activeSubTab === "averages" && (
         <div className="grid grid-cols-1 gap-4 text-right">

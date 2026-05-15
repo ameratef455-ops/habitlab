@@ -26,6 +26,7 @@ export interface Habit {
   createdAt: string;
   completedDates: string[];
   color?: string;
+  tag?: string;
   celebrationIcon?: string;
   replacingHabit?: string;
   isRecoveryModeEnabled?: boolean;
@@ -103,6 +104,32 @@ export const USER_RANKS = [
   "عظيم 🏔️",
 ];
 
+export interface ScheduleTask {
+  id: string;
+  name: string;
+  time: string;
+  duration: string;
+  minGoal: string;
+  expectedGoal: string;
+  date: string;
+  tag?: string;
+  completed: boolean;
+  completionData?: {
+    durationMet: boolean;
+    goalMet: 'min' | 'expected' | 'none';
+    notes: string;
+  };
+}
+
+export interface PlannerMonthData {
+  goal: string;
+  notes: string;
+}
+
+export interface PlannerData {
+  [month: string]: PlannerMonthData;
+}
+
 export const CATEGORIES = [
   'عام',
   'رياضة',
@@ -124,3 +151,15 @@ export const CELEBRATION_ICONS = [
   'Gift',
   'Medal'
 ];
+
+export interface FocusSession {
+  id: string;
+  habitId?: string;
+  modeId: string;
+  startTime: number;
+  endTime?: number;
+  durationMinutes: number;
+  points: number;
+  feedback?: string; 
+  date: string;
+}

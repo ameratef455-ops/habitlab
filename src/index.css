@@ -1,8 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Roboto:wght@300;400;500;700&family=Cairo:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.disable-dark-mode-entirely *));
 
 @theme {
   --font-sans: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Amiri", "Playfair Display", ui-serif, Georgia, serif;
+  --font-note: "Roboto", "Cairo", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --color-slate-900: #0f172a;
   --color-blue-50: #eff6ff;
@@ -24,6 +28,12 @@
     transform: scale(1.02) translateY(-1px);
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  }
+
+  /* LITE CORE MODE: Disables heavy animations and shadows */
+  .lite-mode * {
+     box-shadow: none !important;
+     backdrop-filter: none !important;
   }
 
   .glass-shine {
@@ -112,4 +122,11 @@ body {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+body.lite-mode *, body.lite-mode {
+  transition: none !important;
+  animation: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
 }

@@ -103,6 +103,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({ onClose, onSave, habitTo
         initial={{ scale: 0.98, opacity: 0, y: 10 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.98, opacity: 0, y: 10 }}
+        transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
         className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl overflow-hidden max-h-[85vh] flex flex-col border border-blue-50 dark:border-blue-900/30"
       >
         <div className="px-8 py-5 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between">
@@ -123,6 +124,7 @@ export const HabitModal: React.FC<HabitModalProps> = ({ onClose, onSave, habitTo
                 <motion.div 
                   key="step1"
                   initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
                   className="space-y-6"
                 >
                   <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] text-right">المعلومات الأساسية</p>

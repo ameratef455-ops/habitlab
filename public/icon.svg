@@ -1,9 +1,15 @@
-<svg xmlns="http://www.O3.org/2000/svg" viewBox="0 0 500 500">
-  <path fill="#1E3A8A" d="M160.2,382.7l-35.3,47.8h-41.5L228.6,80l24.4,0l6.4,24.4C226.7,117.8,175,178.5,142.6,269c-15.5,43.3-21,94.9-18.7,143.6C131,410.2,143.1,399,160.2,382.7z"/>
-  <path fill="#1E3A8A" d="M211.5,382h52v48.5h-52V382z"/>
-  <path fill="#1E3A8A" d="M285.8,382h88v48.5h-43l-34.9-38.3h-10.1V382z"/>
-  <path fill="#1E3A8A" d="M394.5,382l35.3,47.8h41.5L326.1,80l-24.4,0l-6.4,24.4c32.7,13.4,84.4,74.1,116.8,164.6c15.5,43.3,21,94.9,18.7,143.6C419.7,410.2,407.6,399,390.5,382.7z"/>
-  <path fill="#1E3A8A" d="M276.5,123.6l10.8-31.5H301l10.8,31.5l28.6,6.6l-18.1,23.3l2,33.1L289,173.2l-33.1,11l2-33.1l-18.1-23.3L276.5,123.6z"/>
-  <text x="250" y="470" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#1E3A8A" text-anchor="middle" letter-spacing="2">PROGRESS YOUR SKILLS</text>
-  <path fill="#1E3A8A" d="M192,206.5c41.3-12,94.3-17.5,145.4-8.8c42.1,7.2,74.7,24,96.6,47c0,0-58.4,128.5-225.1,114.7c-96.1-8-111-53.5-111-53.5S138.8,300,285,296.5C369.3,294.4,369.3,101.5,369.3,101.5L348,150.5c0,0-59-99.7-183.8-19.3L192,206.5z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <defs>
+    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    <filter id="f1">
+      <feDropShadow dx="0" dy="10" stdDeviation="20" flood-color="#2563eb" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  <rect width="500" height="500" fill="#ffffff" />
+  <circle cx="250" cy="250" r="160" fill="url(#g1)" filter="url(#f1)"/>
+  <circle cx="250" cy="250" r="70" fill="none" stroke="#ffffff" stroke-width="25" />
+  <circle cx="250" cy="250" r="30" fill="#ffffff" />
 </svg>

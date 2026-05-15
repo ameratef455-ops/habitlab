@@ -1,0 +1,43 @@
+{
+  "name": "Aura Protocol",
+  "short_name": "Aura",
+  "description": "for better life",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "المهارات",
+      "short_name": "المهارات",
+      "description": "استعرض مهاراتك",
+      "url": "/#habits",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "المختبر",
+      "short_name": "المختبر",
+      "description": "تتبع تقدمك",
+      "url": "/#analysis",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    }
+  ]
+}

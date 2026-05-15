@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Habit, HabitFrequency, AppTheme, WeeklyChallenge } from '../types';
+import { Habit, HabitFrequency, AppTheme, WeeklyChallenge, ScheduleTask, PlannerData } from '../types';
 
 export const HABIT_SCORING_MAP = {
   QUICK_LOG: 10,
@@ -11,6 +11,31 @@ export const HABIT_SCORING_MAP = {
 export function useHabitLab() {
   const [habits, setHabits] = useState<Habit[]>(() => {
     const saved = localStorage.getItem('habits');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [scheduleTasks, setScheduleTasks] = useState<ScheduleTask[]>(() => {
+    const saved = localStorage.getItem('scheduleTasks');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [plannerData, setPlannerData] = useState<PlannerData>(() => {
+    const saved = localStorage.getItem('plannerData');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  const [generalNotes, setGeneralNotes] = useState<any[]>(() => {
+    const saved = localStorage.getItem('generalNotes');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [focusSessions, setFocusSessions] = useState<any[]>(() => {
+    const saved = localStorage.getItem('focusSessions');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [dreamSessions, setDreamSessions] = useState<any[]>(() => {
+    const saved = localStorage.getItem('dreamSessions');
     return saved ? JSON.parse(saved) : [];
   });
 
@@ -33,18 +58,43 @@ export function useHabitLab() {
     prevWeeklyChallenge: WeeklyChallenge | null;
   } | null>(null);
 
-  const [globalRecoveryMode, setGlobalRecoveryMode] = useState<boolean>(false);
-  const [todayIsHoliday, setTodayIsHoliday] = useState<boolean>(false);
+  const [globalRecoveryMode, setGlobalRecoveryMode] = useState<boolean>(() => {
+     const saved = localStorage.getItem('globalRecoveryMode');
+     return saved === 'true';
+  });
+  
+  const [todayIsHoliday, setTodayIsHoliday] = useState<boolean>(() => {
+     const saved = localStorage.getItem('todayIsHoliday');
+     return saved === 'true';
+  });
 
   useEffect(() => {
     localStorage.setItem('habits', JSON.stringify(habits));
+    localStorage.setItem('scheduleTasks', JSON.stringify(scheduleTasks));
+    localStorage.setItem('plannerData', JSON.stringify(plannerData));
+    localStorage.setItem('generalNotes', JSON.stringify(generalNotes));
+    localStorage.setItem('focusSessions', JSON.stringify(focusSessions));
+    localStorage.setItem('dreamSessions', JSON.stringify(dreamSessions));
+    localStorage.setItem('globalRecoveryMode', String(globalRecoveryMode));
+    localStorage.setItem('todayIsHoliday', String(todayIsHoliday));
     if (weeklyChallenge) {
       localStorage.setItem('weeklyChallenge', JSON.stringify(weeklyChallenge));
     } else {
       localStorage.removeItem('weeklyChallenge');
     }
     localStorage.setItem('userPoints', points.toString());
-  }, [habits, weeklyChallenge, points]);
+  }, [
+    habits, 
+    scheduleTasks, 
+    plannerData, 
+    generalNotes, 
+    focusSessions, 
+    dreamSessions, 
+    globalRecoveryMode, 
+    todayIsHoliday, 
+    weeklyChallenge, 
+    points
+  ]);
 
   const addHabit = (habit: Omit<Habit, 'id' | 'streak' | 'completedDates' | 'notes'>) => {
     const newHabit: Habit = {
@@ -55,22 +105,22 @@ export function useHabitLab() {
       completedDates: [],
       notes: []
     };
-    setHabits([...habits, newHabit].sort((a, b) => {
+    setHabits(prev => [...prev, newHabit].sort((a, b) => {
       return (a.order || '').localeCompare(b.order || '') || (a.time || '').localeCompare(b.time || '');
     }));
     return newHabit;
   };
 
   const updateHabit = (id: string, updates: Partial<Habit>) => {
-    setHabits(habits.map(h => h.id === id ? { ...h, ...updates } : h));
+    setHabits(prev => prev.map(h => h.id === id ? { ...h, ...updates } : h));
   };
 
   const deleteHabit = (id: string) => {
-    setHabits(habits.filter(h => h.id !== id));
+    setHabits(prev => prev.filter(h => h.id !== id));
   };
 
   const toggleHabitRecovery = (id: string) => {
-    setHabits(habits.map(h => h.id === id ? { ...h, isRecoveryModeEnabled: !h.isRecoveryModeEnabled } : h));
+    setHabits(prev => prev.map(h => h.id === id ? { ...h, isRecoveryModeEnabled: !h.isRecoveryModeEnabled } : h));
   };
 
   const revertLastCompletion = () => {
@@ -229,16 +279,41 @@ export function useHabitLab() {
     }
   };
 
-  const overrideData = (newHabits: Habit[], newPoints: number, newWeeklyChallenge: WeeklyChallenge | null) => {
-    setHabits(newHabits);
-    setPoints(newPoints);
-    setWeeklyChallenge(newWeeklyChallenge);
+  const overrideData = (remoteData: any) => {
+    setHabits(remoteData.habits || []);
+    setPoints(remoteData.points || 0);
+    setWeeklyChallenge(remoteData.weeklyChallenge || null);
+    if (remoteData.scheduleTasks) setScheduleTasks(remoteData.scheduleTasks);
+    if (remoteData.plannerData) setPlannerData(remoteData.plannerData);
+    if (remoteData.generalNotes) setGeneralNotes(remoteData.generalNotes);
+    if (remoteData.focusSessions) setFocusSessions(remoteData.focusSessions);
+    if (remoteData.dreamSessions) setDreamSessions(remoteData.dreamSessions);
+    if (remoteData.globalRecoveryMode !== undefined) setGlobalRecoveryMode(remoteData.globalRecoveryMode);
+    if (remoteData.todayIsHoliday !== undefined) setTodayIsHoliday(remoteData.todayIsHoliday);
+  };
+
+  const addNoteToHabit = (id: string, text: string) => {
+    setHabits(prev => prev.map(h => 
+      h.id === id 
+        ? { ...h, notes: [...(h.notes || []), { text, type: 'text', date: new Date().toISOString() }] } 
+        : h
+    ));
   };
 
   return { 
     habits, 
     weeklyChallenge,
     points,
+    scheduleTasks,
+    setScheduleTasks,
+    plannerData,
+    setPlannerData,
+    generalNotes,
+    setGeneralNotes,
+    focusSessions,
+    setFocusSessions,
+    dreamSessions,
+    setDreamSessions,
     globalRecoveryMode,
     setGlobalRecoveryMode,
     setWeeklyChallenge,
@@ -250,6 +325,7 @@ export function useHabitLab() {
     revertLastCompletion,
     todayIsHoliday,
     setTodayIsHoliday,
-    overrideData
+    overrideData,
+    addNoteToHabit
   };
 }

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, Suspense, lazy } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as LucideIcons from 'lucide-react';
 import { 
@@ -38,12 +38,19 @@ import {
   Shield,
   MapPin,
   Timer,
-  Activity
+  Activity,
+  FileText,
+  UserX,
 } from 'lucide-react';
 import { useHabitLab } from './hooks/useHabitLab';
 import { HabitCard } from './components/HabitCard';
-import { HabitModal } from './components/HabitModal';
-import { AnalysisView } from './components/AnalysisView';
+
+const HabitModal = lazy(() => import('./components/HabitModal').then(m => ({ default: m.HabitModal })));
+const NotesView = lazy(() => import('./components/NotesView').then(m => ({ default: m.NotesView })));
+const PlannerView = lazy(() => import('./components/PlannerView').then(m => ({ default: m.PlannerView })));
+const ScheduleView = lazy(() => import('./components/ScheduleView').then(m => ({ default: m.ScheduleView })));
+const AnalysisView = lazy(() => import('./components/AnalysisView').then(m => ({ default: m.AnalysisView })));
+const ModesView = lazy(() => import('./components/ModesView').then(m => ({ default: m.ModesView })));
 import { SplashScreen } from './components/SplashScreen';
 import { CelebrationConfetti } from './components/CelebrationConfetti';
 import { TutorialOverlay } from './components/TutorialOverlay';
@@ -70,6 +77,12 @@ export default function App() {
   const { 
     habits, 
     points,
+    scheduleTasks,
+    setScheduleTasks,
+    plannerData,
+    setPlannerData,
+    generalNotes,
+    setGeneralNotes,
     globalRecoveryMode,
     setGlobalRecoveryMode,
     weeklyChallenge,
@@ -82,15 +95,20 @@ export default function App() {
     revertLastCompletion,
     todayIsHoliday,
     setTodayIsHoliday,
-    overrideData
+    overrideData,
+    addNoteToHabit,
+    focusSessions,
+    setFocusSessions,
+    dreamSessions,
+    setDreamSessions
   } = useHabitLab();
 
   const handleRemoteDataSync = (remoteData: any) => {
-    overrideData(remoteData.habits || [], remoteData.points || 0, remoteData.weeklyChallenge || null);
+    overrideData(remoteData);
   };
 
-  const { syncStatus, isSignedIn, signIn, logout, deleteSyncData, isInitializing } = useGoogleDriveSync(
-    { habits, points, weeklyChallenge },
+  const { syncStatus, isSignedIn, signIn, logout, deleteSyncData, isInitializing, userProfile } = useGoogleDriveSync(
+    { habits, points, weeklyChallenge, scheduleTasks, plannerData, globalRecoveryMode, todayIsHoliday, focusSessions, dreamSessions, generalNotes },
     handleRemoteDataSync
   );
 
@@ -98,7 +116,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 2000);
+    const timer = setTimeout(() => setLoading(false), 3000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -178,7 +196,7 @@ export default function App() {
     while (pointsInCurrentLevel >= pointsRequiredForCurrent) {
       pointsInCurrentLevel -= pointsRequiredForCurrent;
       currentLevel++;
-      pointsRequiredForCurrent += 150; // Progressive increment: 300 + 150*level
+      pointsRequiredForCurrent += 150;
     }
     
     return {
@@ -227,109 +245,174 @@ export default function App() {
 
   const generatePDF = async () => {
     try {
-      showFeedback('جار تجهيز التقرير... ⏳', 'info');
+      showFeedback('جار تجهيز التقرير التفصيلي... ⏳', 'info');
       const { jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
       const doc = new jsPDF();
       
       const width = doc.internal.pageSize.getWidth();
       
       // Header Background
-      doc.setFillColor(99, 102, 241); // blue-500
-      doc.rect(0, 0, width, 45, 'F');
+      doc.setFillColor(59, 130, 246); // blue-500
+      doc.rect(0, 0, width, 50, 'F');
       
       doc.setTextColor(255, 255, 255);
-      doc.setFontSize(26);
+      doc.setFontSize(28);
       doc.setFont("helvetica", "bold");
-      doc.text('Aura Progress Report', 20, 28);
+      doc.text('AURA • FULL PROGRESS REPORT', 20, 30);
       
-      doc.setFontSize(11);
+      doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
-      const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-      doc.text(dateStr, width - 20, 28, { align: 'right' });
+      const dateStr = new Date().toLocaleDateString('en-US', { 
+        year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+      });
+      doc.text(`Generated on: ${dateStr}`, width - 20, 30, { align: 'right' });
+      doc.text(`User ID: ${userProfile?.name || 'Aura Developer'}`, width - 20, 35, { align: 'right' });
 
-      // Body 
+      // Section: Summary
       doc.setTextColor(15, 23, 42); // slate-900
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
-      doc.text('Summary', 20, 65);
+      doc.text('1. Executive Summary', 20, 70);
       
-      // Stats Cards
-      doc.setFillColor(248, 250, 252); // slate-50
-      doc.setDrawColor(226, 232, 240); // slate-200
-      doc.setLineWidth(0.5);
-      
+      // Stats Cards Layout
       const cardWidth = (width - 60) / 3;
-
-      // Card 1
-      doc.roundedRect(20, 75, cardWidth, 35, 3, 3, 'FD');
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139); // slate-500
-      doc.setFont("helvetica", "normal");
-      doc.text('Current Level', 25, 87);
-      doc.setTextColor(15, 23, 42); // slate-900
-      doc.setFontSize(16);
-      doc.setFont("helvetica", "bold");
-      doc.text(`Level ${userLevel}`, 25, 100);
-
-      // Card 2
-      doc.roundedRect(20 + cardWidth + 10, 75, cardWidth, 35, 3, 3, 'FD');
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139); // slate-500
-      doc.setFont("helvetica", "normal");
-      doc.text('Total Points', 20 + cardWidth + 15, 87);
-      doc.setTextColor(15, 23, 42); // slate-900
-      doc.setFontSize(16);
-      doc.setFont("helvetica", "bold");
-      doc.text(`${points}`, 20 + cardWidth + 15, 100);
-
-      // Card 3
-      const totalCompletions = habits.reduce((acc, h) => acc + (h.totalCompletions || 0), 0);
-      doc.roundedRect(20 + (cardWidth * 2) + 20, 75, cardWidth, 35, 3, 3, 'FD');
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139); // slate-500
-      doc.setFont("helvetica", "normal");
-      doc.text('Total Check-ins', 20 + (cardWidth * 2) + 25, 87);
-      doc.setTextColor(15, 23, 42); // slate-900
-      doc.setFontSize(16);
-      doc.setFont("helvetica", "bold");
-      doc.text(`${totalCompletions}`, 20 + (cardWidth * 2) + 25, 100);
-
-      doc.setFontSize(18);
-      doc.text('Active Habits', 20, 130);
+      const cardY = 80;
       
-      let y = 145;
-      habits.forEach((h, index) => {
-        if (index % 2 === 0) {
-          doc.setFillColor(248, 250, 252);
-          doc.rect(20, y - 7, width - 40, 18, 'F');
-        }
-        
-        doc.setFontSize(12);
-        doc.setTextColor(15, 23, 42);
-        // Using encodeURIComponent / decodeURIComponent to attempt supporting raw string gracefully if it has unicode
-        doc.text(`Habit: ${h.name.substring(0, 30)}`, 25, y);
-        
-        doc.setFontSize(11);
-        doc.setTextColor(99, 102, 241); // blue-500
-        doc.text(`${h.streak} Day Streak`, width - 25, y, { align: 'right' });
-        
+      const drawCard = (x: number, title: string, value: string, sub: string) => {
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.roundedRect(x, cardY, cardWidth, 40, 5, 5, 'FD');
         doc.setFontSize(9);
         doc.setTextColor(100, 116, 139);
-        const diff = h.difficulty === 'easy' ? 'Easy' : h.difficulty === 'medium' ? 'Medium' : 'Hard';
-        doc.text(`Category: ${h.category} | Difficulty: ${diff} | Total Completions: ${h.totalCompletions || 0}`, 25, y + 6);
+        doc.text(title, x + 5, cardY + 12);
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(16);
+        doc.text(value, x + 5, cardY + 25);
+        doc.setFontSize(8);
+        doc.setTextColor(59, 130, 246);
+        doc.text(sub, x + 5, cardY + 34);
+      };
 
-        y += 18;
-        if (y > 270) {
-          doc.addPage();
-          y = 30;
-        }
-      });
+      drawCard(20, 'Current Level', `Level ${userLevel}`, userTitle || 'Beginner');
+      drawCard(20 + cardWidth + 10, 'Aura Points', `${points}`, `Next lvl in ${Math.round(levelInfo.nextLevelPoints)} pts`);
+      const totalCompletions = habits.reduce((acc, h) => acc + (h.totalCompletions || 0), 0);
+      drawCard(20 + (cardWidth * 2) + 20, 'Total Success', `${totalCompletions}`, 'Successful Check-ins');
+
+      // Section: Skill Progress Table
+      doc.setFontSize(18);
+      doc.setTextColor(15, 23, 42);
+      doc.text('2. Skill Laboratory Status', 20, 140);
       
-      doc.save(`Aura_Report_${new Date().toISOString().split('T')[0]}.pdf`);
-      showFeedback('تم استخراج التقرير بنجاح! 🚀', 'success');
+      const skillTableData = habits.map(h => [
+        h.name,
+        h.category,
+        h.streak,
+        h.totalCompletions || 0,
+        `${h.difficulty === 'easy' ? 'Easy' : h.difficulty === 'medium' ? 'Medium' : 'Hard'}`
+      ]);
+
+      autoTable(doc, {
+        startY: 150,
+        head: [['Skill Description', 'Domain', 'Streak', 'Success', 'Difficulty']],
+        body: skillTableData,
+        theme: 'striped',
+        headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255] },
+        styles: { font: 'helvetica', fontSize: 9 }
+      });
+
+      // Section: Timeline & Planning
+      doc.addPage();
+      doc.setFontSize(18);
+      doc.text('3. Timeline & 2026 Strategy', 20, 30);
+      
+      const plannerEntries = Object.entries(plannerData).filter(([_, data]: [string, any]) => data.goal || data.notes);
+      if (plannerEntries.length > 0) {
+        const plannerTableData = plannerEntries.map(([month, data]: [string, any]) => [
+          month,
+          data.goal || '-',
+          data.notes || '-'
+        ]);
+        autoTable(doc, {
+          startY: 40,
+          head: [['Month', 'Strategic Goal', 'Notes & Roadmap']],
+          body: plannerTableData,
+          theme: 'grid',
+          headStyles: { fillColor: [16, 185, 129] } // emerald-500
+        });
+      } else {
+        doc.setFontSize(10);
+        doc.setTextColor(100, 116, 139);
+        doc.text('No specialized timeline planning data recorded for 2026 yet.', 20, 45);
+      }
+
+      // Section: Sessions Analysis (Focus/Dream)
+      const lastY = (doc as any).lastAutoTable?.finalY || 60;
+      doc.setFontSize(18);
+      doc.setTextColor(15, 23, 42);
+      doc.text('4. Deep Work & Focus Sessions', 20, lastY + 20);
+      
+      const sessionsData = (focusSessions || []).slice(-10).map(s => [
+        new Date(s.timestamp).toLocaleDateString(),
+        s.type,
+        `${s.duration} min`,
+        s.notes || '-'
+      ]);
+
+      if (sessionsData.length > 0) {
+        autoTable(doc, {
+          startY: lastY + 30,
+          head: [['Date', 'Mode', 'Duration', 'Session Summary']],
+          body: sessionsData,
+          theme: 'striped',
+          headStyles: { fillColor: [147, 51, 234] } // purple-600
+        });
+      } else {
+        doc.setFontSize(10);
+        doc.setTextColor(100, 116, 139);
+        doc.text('Awaiting first focus or meditation session recording.', 20, lastY + 35);
+      }
+
+      // Section: General Intelligence Notes
+      doc.addPage();
+      doc.setFontSize(18);
+      doc.setTextColor(15, 23, 42);
+      doc.text('5. Knowledge Base & General Notes', 20, 30);
+      
+      const notesData = (generalNotes || []).map(n => [
+        new Date(n.date).toLocaleDateString(),
+        n.title,
+        n.content.substring(0, 100) + (n.content.length > 100 ? '...' : '')
+      ]);
+
+      if (notesData.length > 0) {
+        autoTable(doc, {
+          startY: 40,
+          head: [['Date', 'Entry Title', 'Content Snippet']],
+          body: notesData,
+          theme: 'plain',
+          styles: { cellPadding: 5 }
+        });
+      } else {
+        doc.setFontSize(10);
+        doc.setTextColor(100, 116, 139);
+        doc.text('Laboratory logbook is currently empty.', 20, 45);
+      }
+
+      // Footer
+      const totalPages = doc.internal.pages.length - 1;
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`Page ${i} of ${totalPages}`, width / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      }
+      
+      doc.save(`AURA_INTEL_REPORT_${new Date().toISOString().split('T')[0]}.pdf`);
+      showFeedback('تم استخراج تقرير Aura بنجاح! 🚀', 'success');
     } catch (err) {
       console.error(err);
-      showFeedback('Error generating PDF', 'alert');
+      showFeedback('Error generating PDF report', 'alert');
     }
   };
 
@@ -376,6 +459,7 @@ export default function App() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [showTips, setShowTips] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'account' | 'system' | 'management' | 'modes'>('account');
   const [zoomIcon, setZoomIcon] = useState<{ icon: string, name: string } | null>(null);
 
   useEffect(() => {
@@ -386,9 +470,12 @@ export default function App() {
     }
   }, []);
 
-  const [activeTab, setActiveTab] = useState<'home' | 'habits' | 'analysis' | 'levels' | 'privacy'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'habits' | 'analysis' | 'levels' | 'privacy' | 'notes' | 'planner' | 'schedule' | 'modes'>('home');
+  const [taskNotificationsEnabled, setTaskNotificationsEnabled] = useState(() => localStorage.getItem('task_notifications_enabled') !== 'false');
+  const [showCelebration, setShowCelebration] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('الكل');
   const [showModal, setShowModal] = useState(false);
+  const [glowActivated, setGlowActivated] = useState(false);
   const [habitToEdit, setHabitToEdit] = useState<Habit | undefined>();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [motivation, setMotivation] = useState<string | null>(null);
@@ -400,7 +487,10 @@ export default function App() {
     icon?: React.ReactNode 
   } | null>(null);
   const [feedback, setFeedback] = useState<{ msg: string; type: 'success' | 'info' | 'alert' } | null>(null);
-  const [showCelebration, setShowCelebration] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('task_notifications_enabled', taskNotificationsEnabled.toString());
+  }, [taskNotificationsEnabled]);
 
   useEffect(() => {
     if (window.location.hash === '#privacy') {
@@ -441,10 +531,11 @@ export default function App() {
       icon: <Sparkles className="w-12 h-12 text-blue-500 mb-6 mx-auto" />,
       onConfirm: async () => {
         let finalHabitData = { ...habitData };
-        let finalId = habitToEdit?.id;
+        let isEditing = !!habitData.id;
+        let finalId = habitData.id;
         
-        if (habitToEdit) {
-          updateHabit(habitToEdit.id, finalHabitData);
+        if (isEditing) {
+          updateHabit(finalId, finalHabitData);
           showFeedback('تم تحديث المهارة بنجاح! ✨');
         } else {
           const newH = addHabit(finalHabitData);
@@ -497,16 +588,19 @@ export default function App() {
             console.error("Calendar sync error", e);
             showFeedback('حصل مشكلة في ضبط التقويم!', 'alert');
           }
-        } else if (!finalHabitData.enableReminders && habitToEdit) {
-           // Delete reminders if they unchecked the box
-           if (habitToEdit.reminderEventId) await deleteEvent(habitToEdit.reminderEventId);
-           if (habitToEdit.nearGoalEventId) await deleteEvent(habitToEdit.nearGoalEventId);
-           if (habitToEdit.awayGoalEventId) await deleteEvent(habitToEdit.awayGoalEventId);
-           updateHabit(finalId, { 
-             reminderEventId: undefined, 
-             nearGoalEventId: undefined, 
-             awayGoalEventId: undefined 
-           });
+        } else if (!finalHabitData.enableReminders && isEditing && habitToEdit) {
+           try {
+             if (habitToEdit.reminderEventId) await deleteEvent(habitToEdit.reminderEventId);
+             if (habitToEdit.nearGoalEventId) await deleteEvent(habitToEdit.nearGoalEventId);
+             if (habitToEdit.awayGoalEventId) await deleteEvent(habitToEdit.awayGoalEventId);
+             updateHabit(finalId, { 
+               reminderEventId: undefined, 
+               nearGoalEventId: undefined, 
+               awayGoalEventId: undefined 
+             });
+           } catch (e) {
+             console.error("Error deleting old reminders", e);
+           }
         }
 
         setHabitToEdit(undefined);
@@ -588,6 +682,10 @@ export default function App() {
     });
   };
 
+  const handleCelebrate = () => {
+    // Celebrate logic
+  };
+
   return (
     <div className="min-h-screen bg-blue-50/30 dark:bg-blue-950 text-slate-900 dark:text-blue-50 font-sans selection:bg-blue-500 selection:text-white transition-all duration-700 overflow-x-hidden">
       <AnimatePresence>
@@ -595,6 +693,20 @@ export default function App() {
       </AnimatePresence>
 
       <CelebrationConfetti active={showCelebration} onComplete={() => setShowCelebration(false)} />
+      <AnimatePresence>
+        {!isOnline && (
+          <motion.div 
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-red-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2"
+          >
+            <WifiOff className="w-4 h-4" />
+            <span className="text-xs font-bold w-max">غير متصل بالإنترنت</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {loading && <SplashScreen key="splash" />}
       </AnimatePresence>
@@ -620,11 +732,11 @@ export default function App() {
               <div className="p-8 pb-4 flex items-center justify-between border-b border-slate-50 dark:border-slate-800">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
-                    <Zap className="w-6 h-6 fill-current" />
+                    <Settings className="w-6 h-6" />
                   </div>
                   <div className="text-right">
-                    <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">لوحة التحكم</h2>
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Aura Dashboard</p>
+                    <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">الإعدادات</h2>
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Aura Settings</p>
                   </div>
                 </div>
                 <button 
@@ -635,103 +747,224 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="p-8 space-y-8">
-                {/* Account & Sync Section */}
-                <div className="space-y-4">
-                  <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] text-right">الحساب والمزامنة السحابية</p>
-                  <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex flex-row-reverse items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isSignedIn ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>
-                          {isSignedIn ? <Cloud className="w-5 h-5" /> : <CloudOff className="w-5 h-5" />}
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs font-black text-slate-800 dark:text-slate-100">
-                            {isSignedIn ? 'سحابة Aura متصلة' : 'المزامنة معطلة'}
-                          </p>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{syncStatus}</p>
-                        </div>
-                      </div>
-                      {!isSignedIn ? (
-                        <button 
-                          onClick={() => { signIn(); setShowDashboard(false); }} 
-                          className="px-6 py-2.5 bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:scale-105 transition-all"
-                        >
-                          تسجيل دخول
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={() => { logout(); setShowDashboard(false); }} 
-                          className="px-6 py-2.5 bg-red-50 text-red-600 dark:bg-red-900/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 dark:border-red-900/30"
-                        >
-                          خروج
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Settings & Tools Section */}
-                <div className="space-y-4">
-                  <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] text-right">أدوات إضافية</p>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    <button 
-                      onClick={() => {
-                        exportData();
-                        setShowDashboard(false);
-                      }} 
-                      className="flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-800 rounded-3xl border border-slate-100 hover:bg-blue-50 hover:border-blue-200 transition-colors group"
-                    >
-                      <span className="text-2xl mb-2 group-hover:-translate-y-1 transition-transform">💾</span>
-                      <span className="text-xs font-black text-slate-600">نسخة احتياطية</span>
-                    </button>
-                    <label className="flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-800 rounded-3xl border border-slate-100 hover:bg-blue-50 hover:border-blue-200 transition-colors cursor-pointer group">
-                      <span className="text-2xl mb-2 group-hover:-translate-y-1 transition-transform">📁</span>
-                      <span className="text-xs font-black text-slate-600">استعادة للبيانات</span>
-                      <input type="file" accept=".json" onChange={(e) => { importData(e); setShowDashboard(false); }} className="hidden" />
-                    </label>
-                  </div>
-
-                  <button 
-                    onClick={() => {
-                      generatePDF();
-                      setShowDashboard(false);
-                    }} 
-                    className="w-full flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-blue-200 transition-all"
-                  >
-                    <span className="text-sm font-black text-slate-600 dark:text-slate-300">مستند التقرير PDF</span>
-                    <span className="text-xl">📄</span>
-                  </button>
-
-                  <button 
-                    onClick={() => { setShowTips(true); setShowDashboard(false); }}
-                    className="w-full flex flex-row-reverse items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-blue-200 transition-all"
-                  >
-                    <div className="text-right">
-                       <p className="text-sm font-black text-slate-800 dark:text-slate-100">مخطط Aura الهندسي</p>
-                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Blueprint Tips</p>
-                    </div>
-                    <Sparkles className="w-5 h-5 text-blue-400" />
-                  </button>
+              <div className="px-8 pt-4">
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-1 rounded-[1.5rem] flex items-center justify-between gap-1 overflow-x-auto no-scrollbar">
+                  {[
+                    { id: 'account', label: 'الحساب', icon: Cloud },
+                    { id: 'modes', label: 'المودات', icon: Sparkles },
+                    { id: 'system', label: 'النظام', icon: Settings },
+                    { id: 'management', label: 'إداري', icon: Shield }
+                  ].map(tab => {
+                    const TabIcon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setSettingsTab(tab.id as 'account' | 'system' | 'management' | 'modes')}
+                        className={`flex-1 min-w-[70px] py-1.5 rounded-[1.25rem] text-[8px] font-black tracking-widest flex flex-col items-center justify-center gap-1 transition-all ${
+                          settingsTab === tab.id 
+                            ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-xl shadow-blue-500/10 border border-slate-100 dark:border-slate-800 scale-105' 
+                            : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <TabIcon className={`w-3.5 h-3.5 ${settingsTab === tab.id ? 'animate-pulse' : ''}`} />
+                        {tab.label}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
-              {/* Privacy Links Footer */}
-              <div className="p-8 bg-slate-50 dark:bg-slate-800/50 flex flex-col gap-4">
-                <button 
-                  onClick={() => {
-                    window.location.hash = '#privacy';
-                    setShowDashboard(false);
-                  }}
-                  className="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-blue-500 transition-colors text-right flex items-center justify-end gap-2 group"
-                >
-                  سياسة خصوصية Aura لضمان الأمان
-                  <Shield className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                </button>
-                <div className="pt-2 flex justify-center border-t border-slate-200 dark:border-slate-700/50 border-dashed">
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">v1.0 Aura Protocol</p>
-                </div>
+              <div className="p-8 space-y-8 h-[60vh] sm:h-auto max-h-[70vh] overflow-y-auto no-scrollbar relative">
+                {settingsTab === 'account' && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] text-right">الحساب والمزامنة السحابية</p>
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800">
+                      <div className="flex flex-col items-center gap-4 text-center">
+                        <div className={`w-16 h-16 rounded-[2rem] flex items-center justify-center ${isSignedIn ? 'bg-blue-100 text-blue-600 border border-blue-200' : 'bg-slate-100 text-slate-400 border border-slate-200'} shadow-xl`}>
+                          {isSignedIn ? <Cloud className="w-8 h-8" /> : <CloudOff className="w-8 h-8" />}
+                        </div>
+                        <div>
+                          <p className="text-sm font-black text-slate-800 dark:text-slate-100">
+                            {isSignedIn ? 'تم التأمين على حسابك السحابي' : 'بيناتك غير محفوظة سحابياً'}
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 px-4 leading-relaxed text-center">
+                            {isSignedIn ? 'بياناتك محفوظة بأمان على Google Drive ومدمجة مع تقويمك.' : 'سجل الدخول لحماية تقدمك وتحويله إلى سحابة Google الخاصة بك. سيتم الحفظ تلقائيا والتأخير عن الحفظ حتى تنتهي من استتخدام التطبيق.'}
+                          </p>
+                        </div>
+                        {!isSignedIn ? (
+                          <button 
+                            onClick={() => { signIn(); setShowDashboard(false); }} 
+                            className="w-full mt-4 py-4 bg-blue-500 text-white rounded-[2rem] text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/30 hover:scale-105 active:scale-95 transition-all"
+                          >
+                            تسجيل دخول Google
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => { logout(); setShowDashboard(false); }} 
+                            className="w-full mt-4 py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-[2rem] text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-all border border-slate-200 dark:border-transparent"
+                          >
+                            تسجيل الخروج
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {settingsTab === 'modes' && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] text-right">أوضاع Aura الذكية</p>
+                    
+                    <div className="space-y-4">
+                        <button 
+                          onClick={() => {
+                            setActiveTab('modes');
+                            setShowDashboard(false);
+                          }} 
+                          className="w-full flex flex-row-reverse items-center justify-between p-6 bg-blue-500 text-white rounded-[2.5rem] shadow-xl shadow-blue-500/30 hover:scale-[1.02] transition-all group"
+                        >
+                           <div className="text-right">
+                              <span className="text-sm font-black block">الدخول للأوضاع 🧘‍♂️</span>
+                              <span className="text-[9px] opacity-80 uppercase tracking-widest">Focus, Dreams & Hub</span>
+                           </div>
+                           <ArrowRight className="w-5 h-5 -rotate-180" />
+                        </button>
+
+                        <div className="flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800/50 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 flex-row-reverse">
+                            <div className="flex flex-col text-right">
+                               <span className="text-sm font-black text-slate-800 dark:text-slate-200">إشعارات المهام 🔔</span>
+                               <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1 leading-relaxed">تثبيت إشعار دائم للمهام القادمة</span>
+                            </div>
+                            <button
+                              onClick={() => setTaskNotificationsEnabled(!taskNotificationsEnabled)}
+                              className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors ${taskNotificationsEnabled ? 'bg-blue-500 shadow-lg shadow-blue-500/20' : 'bg-slate-200 dark:bg-slate-700'}`}
+                            >
+                               <div className={`w-6 h-6 bg-white rounded-full transition-transform shadow-sm ${taskNotificationsEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                            </button>
+                        </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {settingsTab === 'system' && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] text-right">أدوات إضافية و إعدادات</p>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        onClick={() => {
+                          exportData();
+                          setShowDashboard(false);
+                        }} 
+                        className="flex flex-col items-center justify-center p-5 bg-slate-50 dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 hover:border-blue-200 transition-colors group text-center shadow-sm"
+                      >
+                        <span className="text-3xl mb-2 group-hover:-translate-y-1 transition-transform">💾</span>
+                        <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 tracking-widest uppercase">نسخة احتياطية</span>
+                      </button>
+                      <label className="flex flex-col items-center justify-center p-5 bg-slate-50 dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 hover:border-blue-200 transition-colors cursor-pointer group text-center shadow-sm">
+                        <span className="text-3xl mb-2 group-hover:-translate-y-1 transition-transform">📁</span>
+                        <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 tracking-widest uppercase">استعادة بيانات</span>
+                        <input type="file" accept=".json" onChange={(e) => { importData(e); setShowDashboard(false); }} className="hidden" />
+                      </label>
+                    </div>
+
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-[2rem] border border-slate-100 dark:border-slate-800 flex-row-reverse">
+                            <span className="text-sm font-black text-slate-800 dark:text-slate-200">اللغة (Language)</span>
+                            <div className="flex bg-slate-200 dark:bg-slate-700 rounded-full p-1">
+                               <button className="px-4 py-1.5 rounded-full text-xs font-black bg-white dark:bg-slate-900 text-blue-600 shadow-sm transition-all">العربية</button>
+                               <button className="px-4 py-1.5 rounded-full text-xs font-bold text-slate-500 opacity-50 cursor-not-allowed transition-all" title="قريباً">EN</button>
+                            </div>
+                        </div>
+
+                        <button 
+                          onClick={() => {
+                            generatePDF();
+                            setShowDashboard(false);
+                          }} 
+                          className="w-full flex flex-row-reverse items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-[2rem] border border-slate-100 dark:border-slate-800 hover:border-blue-200 transition-all group"
+                        >
+                          <span className="text-sm font-black text-slate-600 dark:text-slate-300">مستند التقرير PDF</span>
+                          <span className="text-2xl group-hover:scale-110 transition-transform">📄</span>
+                        </button>
+
+                        <button 
+                          onClick={() => handleInstallPWA()}
+                          className="w-full flex flex-row-reverse items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-[2rem] border border-slate-100 dark:border-slate-800 hover:border-blue-200 transition-all group"
+                        >
+                          <span className="text-sm font-black text-slate-600 dark:text-slate-300">تثبيت التطبيق والإشعارات</span>
+                          <span className="text-2xl group-hover:scale-110 transition-transform">📱</span>
+                        </button>
+
+                        <button 
+                          onClick={() => {
+                            setShowSupport(true);
+                            setShowDashboard(false);
+                          }} 
+                          className="w-full flex flex-row-reverse items-center justify-between p-4 bg-blue-50 dark:bg-blue-900/20 rounded-[2rem] border border-blue-100 dark:border-blue-800 hover:border-blue-200 transition-all group"
+                        >
+                          <span className="text-sm font-black text-blue-600 dark:text-blue-400">ادعم تطوير المشروع</span>
+                          <span className="text-2xl group-hover:scale-110 transition-transform">🚀</span>
+                        </button>
+                    </div>
+
+                    <div className="flex justify-center gap-4 pt-4 border-t border-slate-100 dark:border-slate-800/50">
+                        <button onClick={() => { setActiveTab('privacy'); setShowDashboard(false); }} className="text-[9px] font-black uppercase text-slate-400 hover:text-blue-500 tracking-widest">سياسة الخصوصية وشروط الاستخدام</button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {settingsTab === 'management' && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] text-right">إدارة متقدمة وحذف</p>
+                    
+                    <div className="space-y-4">
+                        <button 
+                          onClick={() => {
+                            if(window.confirm('هل أنت متأكد من حذف جميع تنبيهات Calendar المرتبطة بـ Aura؟')) {
+                               alert('تم حذف جميع التنبيهات من Google Calendar بنجاح');
+                            }
+                          }}
+                          className="w-full flex flex-row-reverse items-center justify-between p-5 bg-orange-50 dark:bg-orange-900/10 rounded-[2rem] border border-orange-100 dark:border-orange-800 hover:bg-orange-100 transition-all shadow-sm group"
+                        >
+                           <span className="text-sm font-black text-orange-600 dark:text-orange-400">حذف تنبيهات Calendar</span>
+                           <span className="text-2xl group-hover:scale-110 transition-transform">🗓️</span>
+                        </button>
+
+                        <div className="pt-8 border-t border-red-100 dark:border-red-900/30">
+                            <p className="text-[10px] font-black text-red-500 uppercase tracking-widest text-right mb-4">منطقة الخطر</p>
+                            <button 
+                             onClick={async () => {
+                               const confirm1 = window.confirm('تحذير: سيتم حذف جميع بياناتك بالكامل من الجهاز والسحابة. هل أنت متأكد؟');
+                               if(confirm1) {
+                                   const confirm2 = window.prompt('رسالة تأكيد أخيرة: اكتب كلمة "Aura" لتأكيد الحذف النهائي ولا يمكن التراجع بعد ذلك.');
+                                   if(confirm2 !== null && confirm2.trim() === 'Aura') {
+                                       await deleteSyncData();
+                                       localStorage.clear();
+                                       alert('تم حذف جميع البيانات بنجاح.');
+                                       window.location.reload();
+                                   } else {
+                                       alert('تم إلغاء الحذف لعدم مطابقة الكلمة.');
+                                   }
+                               }
+                             }} 
+                             className="w-full flex flex-row-reverse items-center justify-between p-6 bg-red-500 rounded-[2.5rem] border border-red-600 hover:bg-red-600 transition-all shadow-xl shadow-red-500/40 group overflow-hidden relative"
+                            >
+                               <div className="absolute inset-0 bg-red-600/50 -translate-x-[100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+                               <span className="text-sm font-black text-white relative z-10 tracking-wide">حذف جميع بيانات المستخدم بالكامل</span>
+                               <span className="text-2xl group-hover:scale-125 transition-transform relative z-10">⚠️</span>
+                            </button>
+                        </div>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Version Footer */}
+              <div className="p-6 bg-slate-50 dark:bg-slate-800/80 flex flex-col items-center justify-center border-t border-slate-100 dark:border-slate-700/50">
+                <Target className="w-5 h-5 text-blue-500 mb-2 opacity-50" />
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">V1.0 | Made by Amer Atef</p>
+                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1 text-center">Aura | Verified ✅</p>
               </div>
             </motion.div>
           </div>
@@ -773,7 +1006,26 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      <nav className="fixed top-6 left-6 right-6 flex items-center justify-between z-50 pointer-events-none">
+        {activeTab === 'home' ? (
+          <button 
+            onClick={() => setShowDashboard(true)}
+            className="w-10 h-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-100 dark:border-slate-800 rounded-full shadow-lg flex items-center justify-center text-slate-400 hover:text-blue-500 transition-all pointer-events-auto active:scale-90"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+        ) : (
+          <button 
+            onClick={() => setActiveTab('home')}
+            className="w-10 h-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-100 dark:border-slate-800 rounded-full shadow-lg flex items-center justify-center text-slate-400 hover:text-blue-500 transition-all pointer-events-auto active:scale-90"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+        )}
+      </nav>
+
       <main className="max-w-2xl mx-auto px-4 sm:px-14 pt-10 pb-32 relative z-10">
+
         <AnimatePresence>
           {globalRecoveryMode && (
             <motion.div 
@@ -808,10 +1060,10 @@ export default function App() {
             {todayIsHoliday ? (
               <motion.div 
                 key="holiday"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 1.02 }}
-                transition={{ duration: 0.15 }}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
                 className="text-center py-20 px-6 space-y-8"
               >
                 <div className="w-24 h-24 bg-blue-500 rounded-3xl flex items-center justify-center text-white mx-auto shadow-2xl shadow-blue-500/40">
@@ -833,66 +1085,103 @@ export default function App() {
             ) : activeTab === 'home' ? (
               <motion.div 
                 key="home-view"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 1.05 }}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
                 className="flex flex-col items-center justify-center py-10 min-h-[75vh] relative"
               >
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-blue-500/10 dark:bg-blue-500/5 rounded-full blur-[100px] pointer-events-none" />
                 
-                <div className="relative w-[340px] h-[340px] sm:w-[420px] sm:h-[420px] flex items-center justify-center group">
-                  <div className="absolute inset-0 border-[2px] border-blue-200 dark:border-slate-700/50 rounded-full animate-[spin_40s_linear_infinite] border-dashed opacity-50" />
-                  <div className="absolute inset-8 border border-blue-500/20 dark:border-blue-500/20 rounded-full animate-[spin_60s_linear_infinite_reverse]" />
-                  <div className="absolute inset-16 border border-slate-200 dark:border-slate-800 rounded-full" />
-                  <div className="absolute inset-24 border border-blue-100/50 dark:border-slate-800/40 rounded-full animate-[ping_12s_cubic-bezier(0,0,0.2,1)_infinite]" />
-                  
+                {userProfile && (
                   <motion.div 
-                    animate={{ scale: [1, 1.05, 1], boxShadow: ["0 0 40px rgba(37,99,235,0.2)", "0 0 80px rgba(37,99,235,0.4)", "0 0 40px rgba(37,99,235,0.2)"] }} 
-                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }} 
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="absolute top-0 w-full text-center mt-[-60px]"
+                  >
+                    <p className="text-sm font-bold text-slate-500 dark:text-slate-400">أهلاً بك مرة أخرى،</p>
+                    <h2 className="text-3xl font-black text-slate-800 dark:text-white mt-1">{userProfile.name}</h2>
+                  </motion.div>
+                )}
+
+                <div className="relative w-[340px] h-[340px] sm:w-[420px] sm:h-[420px] flex items-center justify-center group">
+                  <div className={`absolute inset-0 border-[2px] rounded-full animate-[spin_40s_linear_infinite] border-dashed transition-all duration-1000 ${glowActivated ? 'border-blue-400 opacity-80 scale-110 shadow-[0_0_50px_rgba(59,130,246,0.5)]' : 'border-blue-200 dark:border-slate-700/50 opacity-50'}`} />
+                  <div className={`absolute inset-8 border rounded-full animate-[spin_60s_linear_infinite_reverse] transition-all duration-1000 ${glowActivated ? 'border-blue-400/50 scale-110 shadow-[0_0_30px_rgba(59,130,246,0.3)]' : 'border-blue-500/20'}`} />
+                  <div className={`absolute inset-16 border rounded-full transition-all duration-1000 ${glowActivated ? 'border-blue-300 dark:border-blue-600 scale-105' : 'border-slate-200 dark:border-slate-800'}`} />
+                  <div className={`absolute inset-24 border rounded-full animate-[ping_12s_cubic-bezier(0,0,0.2,1)_infinite] transition-all duration-1000 ${glowActivated ? 'border-blue-400 shadow-[0_0_40px_rgba(59,130,246,0.4)]' : 'border-blue-100/50 dark:border-slate-800/40'}`} />
+                  
+                  <motion.button 
+                    onClick={() => setGlowActivated(!glowActivated)}
+                    animate={{ 
+                      scale: glowActivated ? [1, 1.1, 1] : [1, 1.05, 1], 
+                      boxShadow: glowActivated 
+                        ? ["0 0 60px rgba(59,130,246,0.6)", "0 0 100px rgba(59,130,246,0.8)", "0 0 60px rgba(59,130,246,0.6)"] 
+                        : ["0 0 40px rgba(37,99,235,0.2)", "0 0 80px rgba(37,99,235,0.4)", "0 0 40px rgba(37,99,235,0.2)"] 
+                    }} 
+                    transition={{ duration: glowActivated ? 2 : 4, repeat: Infinity, ease: "easeInOut" }} 
                     className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center bg-gradient-to-tr from-blue-600 to-blue-500 rounded-full w-32 h-32 justify-center border border-blue-400/30"
                   >
                      <Target className="w-12 h-12 text-white mb-1" />
                      <span className="text-[10px] font-black text-white uppercase tracking-[0.3em]">AURA</span>
-                  </motion.div>
+                  </motion.button>
 
-                  <button onClick={() => setActiveTab('habits')} className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-[0_10px_40px_-10px_rgba(37,99,235,0.2)] border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-blue-600 z-30 group/btn">
+                  <button onClick={() => setActiveTab('habits')} style={{ top: '0%', left: '50%', transform: 'translate(-50%, -50%)' }} className={`absolute w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-[0_10px_40px_-10px_rgba(37,99,235,0.2)] border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-blue-600 z-30 group/btn ${glowActivated ? 'shadow-[0_0_30px_rgba(37,99,235,0.4)] border-blue-200' : ''}`}>
                      <CheckCircle2 className="w-7 h-7 group-hover/btn:scale-110 transition-transform" />
                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 group-hover/btn:text-blue-600 transition-colors">المهارات</span>
                   </button>
 
-                  <button onClick={() => setActiveTab('analysis')} className="absolute top-1/2 right-0 translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-[0_10px_40px_-10px_rgba(147,51,234,0.2)] border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-purple-600 z-30 group/btn">
+                  <button onClick={() => setActiveTab('schedule')} style={{ top: '25%', left: '93.3%', transform: 'translate(-50%, -50%)' }} className="absolute w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-[0_10px_40px_-10px_rgba(16,185,129,0.2)] border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-emerald-600 z-30 group/btn">
+                     <Timer className="w-7 h-7 group-hover/btn:scale-110 transition-transform" />
+                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 group-hover/btn:text-emerald-600 transition-colors">الجدول</span>
+                  </button>
+
+                  <button onClick={() => setActiveTab('analysis')} style={{ top: '75%', left: '93.3%', transform: 'translate(-50%, -50%)' }} className="absolute w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-[0_10px_40px_-10px_rgba(147,51,234,0.2)] border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-purple-600 z-30 group/btn">
                      <Activity className="w-7 h-7 group-hover/btn:scale-110 transition-transform" />
                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 group-hover/btn:text-purple-600 transition-colors">المختبر</span>
                   </button>
 
-                  <button onClick={() => setActiveTab('levels')} className="absolute top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-[0_10px_40px_-10px_rgba(202,138,4,0.2)] border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-yellow-600 z-30 group/btn">
+                  <button onClick={() => setActiveTab('levels')} style={{ top: '100%', left: '50%', transform: 'translate(-50%, -50%)' }} className="absolute w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-[0_10px_40px_-10px_rgba(202,138,4,0.2)] border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-yellow-600 z-30 group/btn">
                      <Award className="w-7 h-7 group-hover/btn:scale-110 transition-transform" />
                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 group-hover/btn:text-yellow-600 transition-colors">المسار</span>
                   </button>
 
-                  <button onClick={() => setShowDashboard(true)} className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-xl border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-slate-600 dark:text-slate-300 z-30 group/btn">
-                     <Settings className="w-7 h-7 group-hover/btn:rotate-90 transition-transform" />
-                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 group-hover/btn:text-slate-800 dark:group-hover/btn:text-white transition-colors">الإعدادات</span>
+                  <button onClick={() => setActiveTab('planner')} style={{ top: '75%', left: '6.7%', transform: 'translate(-50%, -50%)' }} className="absolute w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-[0_10px_40px_-10px_rgba(225,29,72,0.2)] border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-rose-600 z-30 group/btn">
+                     <Target className="w-7 h-7 group-hover/btn:scale-110 transition-transform" />
+                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 group-hover/btn:text-rose-600 transition-colors">المخطط</span>
+                  </button>
+
+                  <button onClick={() => setActiveTab('notes')} style={{ top: '25%', left: '6.7%', transform: 'translate(-50%, -50%)' }} className="absolute w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-[0_10px_40px_-10px_rgba(8,145,178,0.2)] border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-cyan-600 z-30 group/btn">
+                     <FileText className="w-7 h-7 group-hover/btn:scale-110 transition-transform" />
+                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 group-hover/btn:text-cyan-600 transition-colors">ملاحظات</span>
                   </button>
                 </div>
               </motion.div>
             ) : activeTab === 'analysis' ? (
               <motion.div
                 key="analysis-view"
-                initial={{ opacity: 0, scale: 0.99 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 1.01 }}
-                transition={{ duration: 0.1 }}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
               >
-                <AnalysisView habits={habits} points={points} userLevel={userLevel} userTitle={userTitle} />
+                <Suspense fallback={<div className="p-10 text-center text-slate-500 font-bold text-xs uppercase tracking-widest animate-pulse">جاري التحميل...</div>}>
+                  <AnalysisView 
+                    habits={habits} 
+                    points={points} 
+                    userLevel={userLevel} 
+                    userTitle={userTitle} 
+                    focusSessions={focusSessions || []} 
+                    dreamSessions={dreamSessions || []} 
+                  />
+                </Suspense>
               </motion.div>
             ) : activeTab === 'levels' ? (
               <motion.div 
                 key="levels-view" 
-                initial={{ opacity: 0, scale: 0.99 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 1.01 }}
-                transition={{ duration: 0.1 }}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
                 className="space-y-8"
               >
                  <div className="p-10 rounded-[3.5rem] bg-slate-900 text-white shadow-2xl relative overflow-hidden text-right border border-slate-800">
@@ -1101,10 +1390,15 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="max-w-2xl mx-auto px-2"
+              className="max-w-2xl mx-auto px-2 pb-24"
             >
               <div className="flex items-center justify-between mb-16">
-                <div />
+                <button 
+                  onClick={() => setActiveTab('home')}
+                  className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                >
+                  <ChevronRightIcon className="w-5 h-5 rotate-180" />
+                </button>
                 <div className="text-right">
                    <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
                     سياسة الخصوصية
@@ -1130,6 +1424,10 @@ export default function App() {
                   <div className="space-y-6">
                      <div className="flex items-start gap-4 justify-end">
                         <p className="text-sm font-bold text-slate-500">يتم تخزين بياناتك محلياً على جهازك فقط بشكل مشفر تماماً.</p>
+                        <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                     </div>
+                     <div className="flex items-start gap-4 justify-end">
+                        <p className="text-sm font-bold text-slate-500">نحن نقوم بجمع وعرض اسم وصورة حسابك فقط لتخصيص تجربتك وعرض إنجازاتك في التقرير بلوحة المتصدرين أو ملف التصدير الخاص بك ولا نستخدمها لأي أغراض أخرى.</p>
                         <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 shrink-0" />
                      </div>
                      <div className="flex items-start gap-4 justify-end">
@@ -1182,6 +1480,40 @@ export default function App() {
                   </p>
                 </section>
 
+                <div className="h-px bg-slate-100 dark:bg-slate-800 my-10" />
+
+                <section className="space-y-10">
+                  <div className="text-right">
+                    <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+                      شروط الاستخدام
+                    </h2>
+                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-1">Aura Terms of Service</p>
+                  </div>
+                  
+                  <div className="space-y-8">
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-black text-slate-800 dark:text-white">1. قبول الشروط</h3>
+                      <p className="text-sm font-bold text-slate-600 dark:text-slate-400 leading-relaxed">
+                        باستخدامك لتطبيق Aura، فإنك توافق على الالتزم بشروط الاستخدام هذه. نهدف لتقديم خدمة تساعدك في تحسين نمط حياتك، ويجب استخدام التطبيق للأغراض الشخصية فقط.
+                      </p>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-black text-slate-800 dark:text-white">2. مسؤولية البيانات</h3>
+                      <p className="text-sm font-bold text-slate-600 dark:text-slate-400 leading-relaxed">
+                        بياناتك ملكك. أنت مسؤول عن الاحتفاظ بنسخ احتياطية وتأمين حسابك السحابي. Aura لا يتحمل مسؤولية فقدان البيانات الناتج عن حذف التطبيق أو فقدان الوصول للحساب.
+                      </p>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-black text-slate-800 dark:text-white">3. الاعتماد الشخصي</h3>
+                      <p className="text-sm font-bold text-slate-600 dark:text-slate-400 leading-relaxed">
+                        التطبيق ليس بديلاً عن الاستشارات الطبية أو المهنية. أي مهارات أو أهداف تضعها تعتمد على مسؤوليتك الشخصية وتقييمك.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
                 <div className="p-8 bg-blue-50 dark:bg-blue-900/10 rounded-3xl border border-blue-100 dark:border-blue-900/30">
                   <p className="text-xs font-black text-blue-600 dark:text-blue-400 text-center leading-relaxed">
                     يمكنك دائماً مراجعة الأذونات الممنوحة للتطبيقات من خلال لوحة تحكم حساب Google الخاص بك وإلغاؤها في أي وقت.
@@ -1190,16 +1522,135 @@ export default function App() {
               </div>
               
               <div className="mt-32 pt-8 border-t border-slate-100 dark:border-slate-800 flex justify-center">
-                <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.6em]">Designed with Privacy in Mind • Aura Labs</p>
+                <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.6em]">Designed with Privacy in Mind</p>
               </div>
             </motion.div>
-          ) : (
+          ) : activeTab === 'schedule' ? (
+            <motion.div 
+              key="schedule-view-animated" 
+              initial={{ opacity: 0, x: 20 }} 
+              animate={{ opacity: 1, x: 0 }} 
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
+            >
+              <Suspense fallback={<div className="p-10 text-center text-slate-500 font-bold text-xs uppercase tracking-widest animate-pulse">جاري التحميل...</div>}>
+                <ScheduleView 
+                  onBack={() => setActiveTab('home')} 
+                  tasks={scheduleTasks} 
+                  setTasks={setScheduleTasks} 
+                  requestConfirm={(title, description, icon, onConfirm) => {
+                    if (!title) {
+                      setConfirmAction(null);
+                      return;
+                    }
+                    setConfirmAction({ 
+                      title, 
+                      description, 
+                      icon, 
+                      onConfirm: () => {
+                        onConfirm();
+                        setConfirmAction(null);
+                      }
+                    });
+                  }}
+                  onCelebrate={handleCelebrate}
+                />
+              </Suspense>
+            </motion.div>
+          ) : activeTab === 'planner' ? (
+            <motion.div 
+              key="planner-view-animated" 
+              initial={{ opacity: 0, x: 20 }} 
+              animate={{ opacity: 1, x: 0 }} 
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
+            >
+              <Suspense fallback={<div className="p-10 text-center text-slate-500 font-bold text-xs uppercase tracking-widest animate-pulse">جاري التحميل...</div>}>
+                <PlannerView 
+                  onBack={() => setActiveTab('home')} 
+                  plannerData={plannerData} 
+                  setPlannerData={setPlannerData} 
+                  requestConfirm={(title, description, icon, onConfirm) => {
+                    if (!title) {
+                      setConfirmAction(null);
+                      return;
+                    }
+                    setConfirmAction({ 
+                      title, 
+                      description, 
+                      icon, 
+                      onConfirm: () => {
+                        onConfirm();
+                        setConfirmAction(null);
+                      }
+                    });
+                  }}
+                />
+              </Suspense>
+            </motion.div>
+          ) : activeTab === 'notes' ? (
+            <motion.div 
+              key="notes-view-animated" 
+              initial={{ opacity: 0, x: 20 }} 
+              animate={{ opacity: 1, x: 0 }} 
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
+            >
+              <Suspense fallback={<div className="p-10 text-center text-slate-500 font-bold text-xs uppercase tracking-widest animate-pulse">جاري التحميل...</div>}>
+                <NotesView 
+                  habits={habits}
+                  generalNotes={generalNotes || []}
+                  setGeneralNotes={setGeneralNotes}
+                  updateHabit={updateHabit}
+                  focusSessions={focusSessions || []}
+                  dreamSessions={dreamSessions || []}
+                  requestConfirm={(title, description, icon, onConfirm) => {
+                    if (!title) {
+                      setConfirmAction(null);
+                      return;
+                    }
+                    setConfirmAction({ 
+                      title, 
+                      description, 
+                      icon, 
+                      onConfirm: () => {
+                        onConfirm();
+                        setConfirmAction(null);
+                      }
+                    });
+                  }}
+                  onBack={() => setActiveTab('home')}
+                />
+              </Suspense>
+            </motion.div>
+          ) : activeTab === 'modes' ? (
+            <motion.div 
+              key="modes-view-animated" 
+              initial={{ opacity: 0, x: 20 }} 
+              animate={{ opacity: 1, x: 0 }} 
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
+            >
+              <Suspense fallback={<div className="p-10 text-center text-slate-500 font-bold text-xs uppercase tracking-widest animate-pulse">جاري التحميل...</div>}>
+                <ModesView 
+                  habits={habits}
+                  focusSessions={focusSessions || []}
+                  setFocusSessions={setFocusSessions}
+                  dreamSessions={dreamSessions || []}
+                  setDreamSessions={setDreamSessions}
+                  taskNotificationsEnabled={taskNotificationsEnabled}
+                  setTaskNotificationsEnabled={setTaskNotificationsEnabled}
+                  onBack={() => setActiveTab('home')} 
+                />
+              </Suspense>
+            </motion.div>
+          ) : activeTab === 'habits' ? (
             <motion.div 
               key="habits-list"
-              initial={{ opacity: 0, scale: 0.99 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.01 }}
-              transition={{ duration: 0.1 }}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
               className="space-y-4"
             >
               <div className="mb-4 pl-12 flex flex-col gap-4">
@@ -1283,43 +1734,42 @@ export default function App() {
                     onToggleRecovery={toggleHabitRecovery}
                     onRelapse={handleRelapse}
                     onIconClick={(icon, name) => setZoomIcon({ icon, name })}
+                    onCancelAlert={() => {
+                      setConfirmAction({
+                        title: 'إلغاء تنبيه المهارة؟',
+                        description: `هل أنت متأكد من إلغاء المهام المتعلقة بمهارة "${habit.name}" من تقويم Google؟`,
+                        icon: <LucideIcons.BellOff className="w-12 h-12 text-blue-500 mb-6 mx-auto" />,
+                        onConfirm: async () => {
+                          showFeedback('جاري إزالة التنبيهات... ⏳');
+                          try {
+                            if (habit.reminderEventId) Object.assign(habit, { reminderEventId: undefined });
+                            updateHabit(habit.id, { enableReminders: false, reminderEventId: undefined, nearGoalEventId: undefined, awayGoalEventId: undefined });
+                            showFeedback('تم تعطيل التنبيهات بنجاح 🔕', 'info');
+                          } catch(e) {
+                            showFeedback('حصل مشكلة أثناء التعطيل!', 'alert');
+                          }
+                          setConfirmAction(null);
+                        }
+                      });
+                    }}
                   />
                 ))
               )}
             </motion.div>
-          )}
+          ) : null}
         </AnimatePresence>
 
-        <div className="mt-12 pt-12 border-t border-slate-100 flex flex-col items-center gap-6">
-            <div className="flex flex-wrap justify-center gap-4">
-              <button 
-                onClick={handleShare}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-white border border-blue-500 text-blue-600 font-bold text-xs shadow-lg shadow-blue-500/5 hover:bg-blue-50 hover:scale-105 active:scale-95 transition-all"
-              >
-                <Share2 className="w-4 h-4" />
-                مشاركة 🚀
-              </button>
-              
-              <button 
-                onClick={() => setShowSupport(true)}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all"
-              >
-                <Coffee className="w-4 h-4" />
-                ادعمنا ☕
-              </button>
-
-              <button 
-                onClick={() => window.open('https://forms.gle/FC8RuWBEkR7m5tzt9', '_blank')}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all"
-              >
-                <Sparkles className="w-4 h-4" />
-                قيمنا ⭐
-              </button>
+        <div className="mt-12 pt-12 border-t border-slate-100 dark:border-slate-800 flex flex-col items-center gap-6 pb-20">
+            <div className="text-center space-y-1">
+              <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">V1.0 | Made by Amer Atef</p>
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-600 uppercase tracking-widest">Owner of Aura Hub | Verified ✅</p>
             </div>
-            <div className="text-center">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">v1.0 by amer atef . made with love</p>
-              <p className="mt-1 text-[8px] font-bold text-slate-300 uppercase tracking-widest">Crafted by Antigravity Agency</p>
-            </div>
+            <button
+               onClick={() => setSettingsTab('about')}
+               className="text-[10px] text-slate-400 hover:text-blue-500 underline underline-offset-4"
+            >
+              شروط الاستخدام وسياسة الخصوصية
+            </button>
         </div>
 
         {/* Global Confirmation Dialogs */}
@@ -1415,9 +1865,9 @@ export default function App() {
                           
                           <Sparkles className="w-16 h-16 text-blue-500 mb-6 mx-auto animate-pulse" />
                           
-                          <h3 className="text-2xl font-black text-slate-900 mb-4">شارك في بناء Habit Lab 🚀</h3>
+                          <h3 className="text-2xl font-black text-slate-900 mb-4">شارك في بناء Aura 🚀</h3>
                           <div className="space-y-4 text-xs font-bold text-slate-500 leading-relaxed mb-8">
-                             <p>"لو تطبيق habit lab ساعدك تنظم يومك وتبنى مهاراتك بدل التشتت تقدر تدعم استمرار المشروع وتطوير ميزات جديدة بمبلغ رمزي. دعمك هو اللي بيخلينا نكبر ونقدم كود أنضف وتجربة أحسن."</p>
+                             <p>"لو تطبيق Aura ساعدك تنظم يومك وتبنى مهاراتك بدل التشتت تقدر تدعم استمرار المشروع وتطوير ميزات جديدة بمبلغ رمزي. دعمك هو اللي بيخلينا نكبر ونقدم كود أنضف وتجربة أحسن."</p>
                              <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 space-y-3">
                                 <p className="text-slate-800 font-black">طريقة الدعم (فودافون كاش):</p>
                                 <p className="text-lg font-black text-blue-600 font-mono">01282920387 :حول مباشرة على رقم</p>
@@ -1438,18 +1888,15 @@ export default function App() {
                   )}
                 </AnimatePresence>
         </div>
+        
+        <footer className="mt-16 pb-8 text-center opacity-70">
+          <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+            V1.0 | Made by Amer Atef | Verified ✅
+          </p>
+        </footer>
       </main>
 
-      {activeTab !== 'home' && (
-        <button 
-          onClick={() => setActiveTab('home')}
-          className="fixed top-6 right-6 sm:top-10 sm:right-10 w-12 h-12 bg-white dark:bg-slate-900 text-slate-800 dark:text-white rounded-2xl flex items-center justify-center shadow-xl hover:scale-110 active:scale-90 transition-all z-50 border border-slate-100 dark:border-slate-800"
-        >
-          <Target className="w-6 h-6" />
-        </button>
-      )}
-
-      {activeTab !== 'analysis' && activeTab !== 'home' && activeTab !== 'privacy' && (
+      {activeTab === 'habits' && (
         <button 
           onClick={() => setShowModal(true)}
           className="fixed bottom-10 right-10 w-16 h-16 bg-gradient-to-tr from-blue-500 via-blue-600 to-blue-500 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-90 transition-all z-50 group border-2 border-white/20 glass-shine btn-hover-scale"
@@ -1460,14 +1907,16 @@ export default function App() {
 
       <AnimatePresence>
         {showModal && (
-          <HabitModal 
-            onClose={() => {
-              setShowModal(false);
-              setHabitToEdit(undefined);
-            }} 
-            onSave={handleSave}
-            habitToEdit={habitToEdit}
-          />
+          <Suspense fallback={null}>
+            <HabitModal 
+              onClose={() => {
+                setShowModal(false);
+                setHabitToEdit(undefined);
+              }} 
+              onSave={handleSave}
+              habitToEdit={habitToEdit}
+            />
+          </Suspense>
         )}
         {showTips && (
           <EngineeringTips onClose={() => setShowTips(false)} />

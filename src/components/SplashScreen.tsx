@@ -24,7 +24,7 @@ export const SplashScreen: React.FC = () => {
         <motion.div
            initial={{ scale: 0.8, opacity: 0 }}
            animate={{ scale: 1, opacity: 1 }}
-           transition={{ duration: 0.8, type: "spring" }}
+           transition={{ duration: 0.3, type: "spring", delay: 0.05 }}
            className="w-64 h-64 rounded-full border border-blue-100 flex flex-col items-center justify-center relative overflow-hidden bg-white/50 backdrop-blur-sm shadow-inner"
         >
           <motion.div

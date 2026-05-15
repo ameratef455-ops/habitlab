@@ -1,6 +1,6 @@
 import React, { useState, memo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, Flame, MessageSquare, Mic, AlertCircle, TrendingUp, Calendar, Clock, Goal, ListOrdered, Plus, MoreVertical, Edit3, Trash2, Sparkles, Target, Zap } from 'lucide-react';
+import { Check, Flame, MessageSquare, Mic, AlertCircle, TrendingUp, Calendar, Clock, Goal, ListOrdered, Plus, MoreVertical, Edit3, Trash2, Sparkles, Target, Zap, CheckCircle2, Flag } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Habit } from '../types';
 
@@ -14,15 +14,19 @@ interface HabitCardProps {
   onRelapse: (id: string, reason: string) => void;
   isGlobalRecovery?: boolean;
   onIconClick?: (iconName: string, habitName: string) => void;
+  onCancelAlert?: () => void;
 }
 
-export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedToday, onEdit, onDelete, onToggleRecovery, onRelapse, isGlobalRecovery, onIconClick }) => {
+export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedToday, onEdit, onDelete, onToggleRecovery, onRelapse, isGlobalRecovery, onIconClick, onCancelAlert }) => {
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [showRelapseInput, setShowRelapseInput] = useState(false);
   const [relapseReason, setRelapseReason] = useState('');
   const [note, setNote] = useState('');
+  const [noteTitle, setNoteTitle] = useState('');
+  const [noteSubtitle, setNoteSubtitle] = useState('');
   const [isRecovery, setIsRecovery] = useState(false);
-  const [showActions, setShowActions] = useState(false);
+  const [showManageMenu, setShowManageMenu] = useState(false);
+  const [showActionMenu, setShowActionMenu] = useState(false);
   
   // Questionnaire state
   const [step, setStep] = useState(0); // -1: quick choice, 0: note, 1: details
@@ -49,16 +53,21 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
   };
 
   const handleComplete = (type: 'text' | 'voice' = 'text') => {
-    onComplete(note, type, isRecovery || isGlobalRecovery, qData);
+    let combinedNote = note;
+    if (noteTitle || noteSubtitle) {
+       combinedNote = `${noteTitle ? `# ${noteTitle}\n` : ''}${noteSubtitle ? `## ${noteSubtitle}\n` : ''}\n${note}`;
+    }
+    onComplete(combinedNote, type, isRecovery || isGlobalRecovery, qData);
     setShowNoteInput(false);
     setNote('');
+    setNoteTitle('');
+    setNoteSubtitle('');
     setStep(0);
     setIsRecording(false);
   };
 
   const startRecording = () => {
     setIsRecording(true);
-    // Mimic recording
     setTimeout(() => {
       setIsRecording(false);
       setNote('تسجيل صوتي تم حفظه بنجاح 🎙️');
@@ -67,22 +76,17 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
 
   const progress = React.useMemo(() => {
     if (!habit.awayGoal || !habit.awayGoal.targetDate) return 0;
-    
-    // Use createdAt or default to 30 days ago
     const start = habit.createdAt ? new Date(habit.createdAt).getTime() : (Date.now() - 30 * 24 * 60 * 60 * 1000);
     const target = new Date(habit.awayGoal.targetDate).getTime();
     const now = Date.now();
     
     if (target <= start) return 100;
-    
     const total = target - start;
     const elapsed = now - start;
-    
     return Math.min(100, Math.max(0, (elapsed / total) * 100));
   }, [habit]);
 
   const isNearGoal = progress >= 80 && progress < 100;
-
   const HabitIcon = (LucideIcons as any)[habit.icon] || LucideIcons.CheckCircle2;
 
   const goalCounts = React.useMemo(() => {
@@ -94,439 +98,422 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
   }, [habit.notes]);
 
   return (
-    <motion.div 
-      layout
-      className="relative flex flex-col sm:flex-row gap-4 sm:gap-6 group items-center sm:items-start text-center sm:text-right"
-    >
-      {/* Timeline Node (Hidden on mobile for better centering) */}
-      <div className="hidden sm:flex relative flex-col items-center">
-        <div className={`w-8 h-8 rounded-full z-10 flex items-center justify-center transition-all duration-500 border-2 ${
-          isCompletedToday 
-            ? 'bg-blue-500 border-blue-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
-            : 'bg-white border-slate-200 text-slate-400 group-hover:border-blue-500'
-        }`}>
-          {isCompletedToday ? <Check className="w-4 h-4" /> : <div className="w-1.5 h-1.5 rounded-full bg-current" />}
-        </div>
-        <div className="timeline-line" />
+    <div className="relative group w-full flex justify-center py-6 mx-auto mb-4 mt-8">
+      <div className="absolute -top-6 left-0 right-0 flex flex-col items-center gap-2 z-20 pointer-events-none">
+         {habit.nearGoal?.description && (
+           <motion.div 
+             initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+             className="bg-blue-500 text-white px-4 py-1.5 rounded-full shadow-lg shadow-blue-500/30 border-2 border-white dark:border-slate-800 text-[9px] font-black uppercase tracking-widest flex items-center gap-2 pointer-events-auto"
+           >
+             <span>الهدف القريب: {habit.nearGoal.description.substring(0,25)}</span>
+             <Target className="w-3 h-3" />
+           </motion.div>
+         )}
+         {habit.awayGoal?.description && (
+           <motion.div 
+             initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+             className="bg-emerald-500 text-white px-4 py-1.5 rounded-full shadow-lg shadow-emerald-500/30 border-2 border-white dark:border-slate-800 text-[9px] font-black uppercase tracking-widest flex items-center gap-2 pointer-events-auto"
+           >
+             <Sparkles className="w-3 h-3" />
+             <span>الهدف البعيد: {habit.awayGoal.description.substring(0,25)}</span>
+           </motion.div>
+         )}
       </div>
 
-      {/* Content Card */}
-      <div className="w-full sm:flex-1 pb-4 sm:pb-6">
-        <motion.div 
-          animate={isNearGoal && !isCompletedToday ? { 
-            boxShadow: ["0 0 0px rgba(99,102,241,0)", "0 0 40px rgba(99,102,241,0.3)", "0 0 0px rgba(99,102,241,0)"],
-            borderColor: ["rgba(99,102,241,0.2)", "rgba(99,102,241,1)", "rgba(99,102,241,0.2)"]
-          } : {}}
-          transition={{ repeat: Infinity, duration: 2 }}
-          className={`p-5 rounded-[2rem] glass transition-all duration-500 relative overflow-hidden border capitalize ${
-            isCompletedToday 
-              ? 'opacity-60 border-transparent bg-slate-50/20' 
-              : isNearGoal 
-                ? 'shadow-2xl shadow-blue-500/5 border-blue-500 bg-white/90'
-                : 'shadow-lg shadow-slate-200/50 border-white/50 backdrop-blur-3xl bg-white/80'
-          }`}
-        >
-          {isNearGoal && !isCompletedToday && (
-            <motion.div 
-              initial={{ scale: 0 }}
-              animate={{ scale: [0, 1.2, 1] }}
-              className="absolute -top-1 -right-1 w-24 h-24 bg-blue-500/5 blur-2xl rounded-full"
-            />
-          )}
+      {/* Main Circular Card */}
+      <motion.div 
+        layout
+        animate={isNearGoal && !isCompletedToday ? { 
+          boxShadow: ["0 0 0px rgba(99,102,241,0)", "0 0 50px rgba(99,102,241,0.3)", "0 0 0px rgba(99,102,241,0)"],
+          borderColor: ["rgba(99,102,241,0.2)", "rgba(99,102,241,1)", "rgba(99,102,241,0.2)"]
+        } : {}}
+        transition={{ repeat: Infinity, duration: 6 }}
+        className={`w-full max-w-[340px] aspect-square rounded-full flex flex-col justify-center items-center text-center p-8 relative overflow-hidden transition-all duration-1000 mx-auto ${
+          isCompletedToday 
+            ? 'opacity-80 border-2 border-emerald-400 bg-emerald-50 dark:bg-emerald-900/10 shadow-[0_0_30px_rgba(16,185,129,0.15)]' 
+            : isNearGoal 
+              ? 'shadow-2xl shadow-blue-500/20 border border-blue-400 bg-white dark:bg-slate-800'
+              : 'shadow-xl shadow-slate-200/50 dark:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)] border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800'
+        }`}
+      >
+        {isCompletedToday && (
+          <div className="absolute inset-0 bg-emerald-400/5 dark:bg-emerald-400/10 animate-pulse pointer-events-none" />
+        )}
 
-          <div className="flex flex-col gap-4 relative z-10">
-            <div className="flex items-start justify-between">
-              <div className="flex gap-4 items-center">
-                <button 
-                  onClick={() => onIconClick?.(habit.icon || 'CheckCircle2', habit.name)}
-                  className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 text-white hover:scale-110 active:scale-95 ${
-                  isCompletedToday ? 'bg-slate-400' : 'bg-blue-600'
-                }`}>
-                  <HabitIcon className="w-5 h-5" />
-                </button>
-                <div className="text-right">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <h4 className="text-base font-black tracking-tight text-slate-800 dark:text-slate-100">{habit.name}</h4>
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{habit.category || 'العامة'}</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-[8px] font-bold text-slate-400 uppercase tracking-widest flex-row-reverse">
-                    <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> {habit.time || 'أي وقت'}</span>
-                    <span className="flex items-center gap-1"><Flame className="w-2.5 h-2.5 text-blue-400" /> {habit.streak} يوم</span>
-                  </div>
-                </div>
-              </div>
+        <div className="absolute inset-2 flex items-center justify-center pointer-events-none">
+           <svg className="absolute inset-0 w-full h-full -rotate-90">
+             <circle cx="50%" cy="50%" r="48%" fill="none" strokeWidth="2" className="stroke-slate-100 dark:stroke-slate-700 opacity-50" />
+             <motion.circle 
+               cx="50%" cy="50%" r="48%" fill="none" strokeWidth="4" 
+               strokeDasharray="301%"
+               initial={{ strokeDashoffset: '301%' }}
+               animate={{ strokeDashoffset: isCompletedToday ? '0%' : `${301 - (301 * progress / 100)}%` }}
+               className={`transition-all duration-1000 ${isCompletedToday ? 'stroke-emerald-500' : 'stroke-blue-500'}`}
+               strokeLinecap="round"
+             />
+           </svg>
+        </div>
 
-              <div className="flex items-center gap-1.5 opacity-40 hover:opacity-100 transition-opacity">
-                <button 
-                  onClick={() => onEdit(habit)}
-                  className="w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-all flex items-center justify-center"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                </button>
-                <button 
-                  onClick={() => onDelete(habit.id)}
-                  className="w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-all flex items-center justify-center"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+        {!showActionMenu && !showDetails && !showNoteInput && !showRelapseInput && (
+          <div className="flex flex-col items-center justify-center relative z-10 w-full h-full">
+            <button 
+              onClick={() => onIconClick?.(habit.icon || 'CheckCircle2', habit.name)}
+              className={`w-16 h-16 rounded-full mb-3 flex items-center justify-center transition-all duration-500 text-white shadow-xl ${
+              isCompletedToday ? 'bg-gradient-to-tr from-emerald-500 to-emerald-400 shadow-emerald-500/40 scale-105' : 'bg-gradient-to-tr from-blue-600 to-blue-500 shadow-blue-500/40 hover:scale-110 active:scale-95'
+            }`}>
+              {isCompletedToday ? <Check className="w-8 h-8 animate-[scale-in_0.5s_ease-out]" /> : <HabitIcon className="w-8 h-8" />}
+            </button>
+            
+            <h4 className="text-2xl font-black tracking-tight text-slate-800 dark:text-slate-100 leading-tight mb-2 px-2 max-w-[200px] break-words">{habit.name}</h4>
+            
+            <div className="flex items-center gap-3 text-[11px] font-bold text-slate-500 uppercase tracking-widest bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm px-4 py-1.5 rounded-full border border-slate-100 dark:border-slate-700">
+              <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-blue-400" /> {habit.time || 'أي وقت'}</span>
+              <span className="flex items-center gap-1 text-orange-500"><Flame className="w-3.5 h-3.5 text-orange-400" /> {habit.streak} يوم</span>
             </div>
 
-            <div className="space-y-4">
-               {/* Away Goal Progress */}
-               <div className="space-y-1.5 bg-slate-50/50 dark:bg-slate-800/20 p-3 rounded-2xl border border-slate-100 dark:border-slate-800/50">
-                  <div className="flex justify-between items-center px-1 mb-1">
-                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">المتبقي للهدف البعيد</span>
-                     <span className="text-[8px] font-black text-blue-500">{Math.round(progress)}%</span>
-                  </div>
-                  <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden relative">
-                     <motion.div 
-                       initial={{ width: 0 }}
-                       animate={{ width: `${progress}%` }}
-                       className="h-full bg-blue-500/80 transition-all duration-1000"
-                     />
-                  </div>
-               </div>
+            <button 
+              onClick={() => setShowManageMenu(!showManageMenu)}
+              className="absolute top-2 right-2 w-10 h-10 rounded-full bg-slate-100/80 dark:bg-slate-700/80 text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-all flex items-center justify-center backdrop-blur-sm shadow-sm z-40"
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
 
-               {/* Details Toggle */}
-               <div className="pt-2 border-t border-slate-50 dark:border-slate-800/50">
-                  <button 
-                    onClick={() => setShowDetails(!showDetails)}
-                    className="w-full flex items-center justify-between px-2 py-1 text-[8px] font-black text-slate-400 uppercase tracking-widest hover:text-blue-500 transition-colors"
-                  >
-                    <span>{showDetails ? 'إخفاء التفاصيل' : 'عرض تفاصيل المهارة'}</span>
-                    <Plus className={`w-2.5 h-2.5 transition-transform ${showDetails ? 'rotate-45' : ''}`} />
+            <AnimatePresence>
+              {showManageMenu && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
+                  className="absolute top-14 right-2 w-40 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl border border-slate-100 dark:border-slate-700 shadow-2xl rounded-3xl overflow-hidden z-50 text-right"
+                >
+                  <button onClick={() => { onEdit(habit); setShowManageMenu(false); }} className="w-full px-5 py-3.5 text-xs font-bold text-slate-700 hover:bg-blue-50 dark:text-slate-200 dark:hover:bg-slate-700 flex items-center justify-between transition-colors">
+                    تعديل <Edit3 className="w-4 h-4 ml-2 opacity-50" />
                   </button>
-                  
-                  <AnimatePresence>
-                    {showDetails && (
-                      <motion.div 
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="grid grid-cols-2 gap-2 pt-3">
-                           <div className="col-span-2 flex gap-1 justify-end mb-1">
-                              <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 text-[7px] font-black uppercase">ممتاز: {goalCounts.exceeded}</span>
-                              <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 text-[7px] font-black uppercase">متوقع: {goalCounts.expected}</span>
-                              <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 text-[7px] font-black uppercase">أدنى: {goalCounts.min}</span>
-                              <span className="text-[8px] font-black text-slate-400 uppercase mr-1">الإنجازات:</span>
-                           </div>
-                           <div className="p-2 bg-slate-50/50 dark:bg-slate-800/50 rounded-xl flex items-center gap-2 justify-end">
-                              <span className="text-[9px] font-bold text-slate-600 dark:text-slate-300">{habit.frequency}</span>
-                              <span className="text-[8px] font-black text-slate-400 uppercase">تكرار المهارة</span>
-                              <Calendar className="w-2.5 h-2.5 text-blue-400" />
-                           </div>
-                           <div className="p-2 bg-slate-50/50 dark:bg-slate-800/50 rounded-xl flex items-center gap-2 justify-end">
-                              <span className="text-[9px] font-bold text-slate-600 dark:text-slate-300">{habit.nearGoal.target} {habit.nearGoal.frequency}</span>
-                              <span className="text-[8px] font-black text-slate-400 uppercase">تكرار الهدف القريب</span>
-                              <ListOrdered className="w-2.5 h-2.5 text-blue-400" />
-                           </div>
-                           <div className="p-2 bg-slate-50/50 dark:bg-slate-800/50 rounded-xl flex items-center gap-2 justify-end">
-                              <span className="text-[9px] font-bold text-slate-600 dark:text-slate-300">{habit.minGoal}</span>
-                              <span className="text-[8px] font-black text-slate-400 uppercase">الحد الأدنى</span>
-                              <TrendingUp className="w-2.5 h-2.5 text-blue-400" />
-                           </div>
-                           <div className="p-2 bg-slate-50/50 dark:bg-slate-800/50 rounded-xl flex items-center gap-2 justify-end">
-                              <span className="text-[9px] font-bold text-slate-600 dark:text-slate-300">{habit.expectedGoal}</span>
-                              <span className="text-[8px] font-black text-slate-400 uppercase">الهدف المتوقع</span>
-                              <Target className="w-2.5 h-2.5 text-blue-400" />
-                           </div>
-                           <div className="p-2 bg-slate-50/50 dark:bg-slate-800/50 rounded-xl flex items-center gap-2 justify-end">
-                              <span className="text-[9px] font-bold text-slate-600 dark:text-slate-300">{habit.duration} د</span>
-                              <span className="text-[8px] font-black text-slate-400 uppercase">المدة</span>
-                              <Goal className="w-2.5 h-2.5 text-blue-400" />
-                           </div>
-                           <div className="col-span-2 p-2 bg-blue-50/30 dark:bg-blue-900/10 rounded-xl flex items-center gap-2 justify-end">
-                              <span className="text-[9px] font-bold text-blue-600 dark:text-blue-300">{habit.awayGoal.description}</span>
-                              <span className="text-[8px] font-black text-blue-400 uppercase">الهدف البعيد</span>
-                              <Sparkles className="w-2.5 h-2.5 text-blue-400" />
-                           </div>
-                           {habit.replacingHabit && (
-                             <div className="col-span-2 p-2 bg-blue-50/30 dark:bg-blue-900/10 rounded-xl flex items-center gap-2 justify-end">
-                                <span className="text-[9px] font-bold text-blue-600 dark:text-blue-300">{habit.replacingHabit}</span>
-                                <span className="text-[8px] font-black text-blue-400 uppercase">بديل لـ</span>
-                                <AlertCircle className="w-2.5 h-2.5 text-blue-400" />
-                             </div>
-                           )}
-                           {habit.motivation && (
-                             <div className="col-span-2 p-2 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl flex items-center gap-2 justify-end">
-                                <span className="text-[9px] font-bold text-blue-700 dark:text-blue-300">"{habit.motivation}"</span>
-                                <span className="text-[8px] font-black text-blue-500 uppercase">الحافز</span>
-                                <Zap className="w-2.5 h-2.5 text-blue-400" />
-                             </div>
-                           )}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-               </div>
+                  {habit.enableReminders && onCancelAlert && (
+                    <button onClick={() => { onCancelAlert(); setShowManageMenu(false); }} className="w-full px-5 py-3.5 text-xs font-bold text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center justify-between border-t border-slate-100 dark:border-slate-700 transition-colors">
+                      حذف التنبيه <LucideIcons.BellOff className="w-4 h-4 ml-2 opacity-50" />
+                    </button>
+                  )}
+                  <button onClick={() => { onDelete(habit.id); setShowManageMenu(false); }} className="w-full px-5 py-3.5 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-between border-t border-slate-100 dark:border-slate-700 transition-colors">
+                    حذف <Trash2 className="w-4 h-4 ml-2 opacity-50" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-               {/* Buttons Row */}
-               {!isCompletedToday && (
-                 <div className="flex items-center gap-2 justify-end pt-2">
-                   <button 
-                    onClick={() => setShowRelapseInput(true)}
-                    className="h-9 px-4 text-blue-500 border border-slate-100 hover:bg-blue-50 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
-                  >
-                    وقعت؟
-                  </button>
-                   <button 
-                    onClick={() => onToggleRecovery(habit.id)}
-                    className={`h-9 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-                      habit.isRecoveryModeEnabled 
-                        ? 'bg-blue-100 text-blue-700 border border-blue-200 shadow-sm' 
-                        : 'bg-white dark:bg-slate-800 text-slate-400 border border-slate-100 dark:border-slate-700 hover:bg-blue-50'
-                    }`}
-                  >
-                    استعادة
-                  </button>
-                  <button 
-                    onClick={handleQuickComplete}
-                    className="h-9 px-4 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all shadow-sm"
-                  >
-                    إنجاز سريع
-                  </button>
-                  <button 
-                    onClick={() => setShowNoteInput(true)}
-                    className="h-9 px-6 bg-blue-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-md shadow-blue-500/20"
-                  >
-                    بدء التسجيل
-                  </button>
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3">
+               <button 
+                 onClick={() => setShowDetails(true)}
+                 className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center hover:bg-blue-100 hover:text-blue-600 transition-all shadow-md active:scale-95 group/info"
+               >
+                 <ListOrdered className="w-5 h-5 group-hover/info:scale-125 transition-transform" />
+               </button>
+               {isCompletedToday ? (
+                 <div className="w-12 h-12 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-500 flex items-center justify-center animate-pulse border border-emerald-500/30">
+                   <Sparkles className="w-5 h-5" />
                  </div>
+               ) : (
+                 <button 
+                   onClick={() => setShowActionMenu(true)}
+                   className="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 active:scale-90 transition-all shadow-xl shadow-blue-500/40 relative group/check"
+                 >
+                   <Check className="w-6 h-6 group-hover/check:scale-125 transition-transform" />
+                 </button>
                )}
             </div>
           </div>
+        )}
 
-          <AnimatePresence mode="wait">
-            {showRelapseInput && (
-              <motion.div 
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="mt-6 pt-6 border-t border-blue-100 dark:border-blue-900/30 space-y-4 text-right"
+        {/* Action Menu View */}
+        <AnimatePresence>
+          {showActionMenu && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, rotate: -5 }}
+              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+              exit={{ opacity: 0, scale: 0.9, rotate: 5 }}
+              transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
+              className="absolute inset-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl z-20 flex flex-col justify-center items-center p-6 rounded-full"
+            >
+              <h5 className="text-[10px] font-black text-slate-600 dark:text-slate-300 mb-6 uppercase tracking-[0.2em] bg-slate-100 dark:bg-slate-700 px-4 py-2 rounded-full shadow-sm">Initialize Interaction</h5>
+              <div className="grid grid-cols-2 gap-3 w-full max-w-[210px]">
+                <button onClick={() => { setShowActionMenu(false); handleQuickComplete(); }} className="aspect-square bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group">
+                  <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">⚡</div>
+                  سريع
+                </button>
+                <button onClick={() => { setShowActionMenu(false); setShowNoteInput(true); setStep(0); }} className="aspect-square bg-slate-50 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group">
+                  <div className="w-8 h-8 rounded-full bg-slate-500/10 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">📝</div>
+                  مفصل
+                </button>
+                <button onClick={() => { setShowActionMenu(false); onToggleRecovery(habit.id); }} className="aspect-square bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">🛡️</div>
+                  {habit.isRecoveryModeEnabled ? 'إلغاء' : 'استعادة'}
+                </button>
+                <button onClick={() => { setShowActionMenu(false); setShowRelapseInput(true); }} className="aspect-square bg-orange-50 dark:bg-orange-900/20 text-orange-500 dark:text-orange-400 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group">
+                  <div className="w-8 h-8 rounded-full bg-orange-500/10 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">🍂</div>
+                  وقعـت؟
+                </button>
+              </div>
+              <button 
+                onClick={() => setShowActionMenu(false)} 
+                className="mt-6 w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
               >
-                 <div className="flex items-center justify-end gap-2 text-blue-500 mb-2">
-                   <span className="text-xs font-black uppercase tracking-widest">إيه اللي حصل؟</span>
-                   <AlertCircle className="w-4 h-4" />
-                 </div>
-                 <p className="text-xs font-bold text-slate-500 mb-4">وقعت ليه؟ اكتب السبب عشان تتعلم منه للمرة الجاية. معلش تتعوض بكرة، فعل وضع الاستعادة!</p>
-                 <textarea 
-                   value={relapseReason}
-                   onChange={(e) => setRelapseReason(e.target.value)}
-                   className="w-full bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-3xl border border-blue-100 dark:border-blue-900/50 outline-none focus:border-blue-500 text-xs font-semibold resize-none h-24 text-right dark:text-slate-200"
-                   placeholder="السبب كان..."
-                 />
-                 <div className="flex items-center justify-between mt-4">
-                    <button 
-                      onClick={() => setShowRelapseInput(false)}
-                      className="text-[10px] font-black text-slate-400 dark:text-slate-500 underline underline-offset-4"
-                    >
-                      إلغاء
-                    </button>
-                    <button 
-                      onClick={() => {
-                        onRelapse(habit.id, relapseReason);
-                        setShowRelapseInput(false);
-                      }}
-                      className="px-6 py-3 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 shadow-xl shadow-blue-500/20 active:scale-95 transition-all"
-                    >
-                      سجل التعثر
-                    </button>
-                 </div>
-              </motion.div>
-            )}
+                <Plus className="w-5 h-5 rotate-45" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-            {showNoteInput && (
-              <motion.div 
-                key={step}
-                initial={{ height: 0, opacity: 0, x: step === 1 ? 20 : -20 }}
-                animate={{ height: 'auto', opacity: 1, x: 0 }}
-                exit={{ height: 0, opacity: 0, x: step === 1 ? -20 : 20 }}
-                className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 space-y-4"
+        {/* Details View */}
+        <AnimatePresence>
+            {showDetails && (
+              <motion.div
+                 initial={{ opacity: 0, scale: 0.9 }}
+                 animate={{ opacity: 1, scale: 1 }}
+                 exit={{ opacity: 0, scale: 0.9 }}
+                 transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
+                 className="fixed inset-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 z-[100] bg-white dark:bg-slate-900 p-8 rounded-[3rem] shadow-[0_20px_60px_-10px_rgba(0,0,0,0.3)] border border-slate-100 dark:border-slate-800 text-right w-full sm:w-[500px] h-full sm:h-auto max-h-[90vh] flex flex-col pt-12 overflow-hidden"
               >
-                {step === -1 ? (
-                  <div className="space-y-6 text-right">
-                    <div className="flex items-center justify-end gap-2 text-blue-500">
-                       <span className="text-xs font-black uppercase tracking-widest">إتمام الإنجاز</span>
-                       <Zap className="w-4 h-4 fill-current" />
-                    </div>
-                    <p className="text-xs font-bold text-slate-500">تحب تسجل الإنجاز دلوقتى ولا تضيف شوية تفاصيل؟</p>
-                    <div className="grid grid-cols-2 gap-3">
-                       <button 
-                         onClick={recordImmediately}
-                         className="py-4 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                       >
-                          سجل فوراً (١٠ نقاط)
-                       </button>
-                       <button 
-                         onClick={() => setStep(0)}
-                         className="py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
-                       >
-                          إضافة ملاحظات
-                       </button>
-                    </div>
-                  </div>
-                ) : step === 0 ? (
-                  <>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 text-blue-500">
-                        <MessageSquare className="w-4 h-4" />
-                        <span className="text-[10px] font-black uppercase tracking-widest">ملاحظات اليوم</span>
-                      </div>
-                      <button 
-                        type="button"
-                        onClick={startRecording}
-                        className={`p-2 rounded-lg transition-all ${isRecording ? 'bg-blue-500 text-white animate-pulse' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-blue-500 dark:hover:text-blue-400'}`}
-                      >
-                        <Mic className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <div className="relative">
-                      <textarea 
-                        value={note}
-                        onChange={(e) => setNote(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-slate-800/50 p-4 rounded-3xl border border-slate-100 dark:border-slate-800 outline-none focus:border-blue-500 text-xs font-semibold resize-none h-24 text-right dark:text-slate-200"
-                        placeholder={isRecording ? 'جاري التسجيل... استنى شوية' : 'إيه اللي حصل النهاردة؟ حسيت بإيه؟'}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <button 
-                        onClick={() => setIsRecovery(!isRecovery)}
-                        className={`text-[9px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all border ${
-                          isRecovery 
-                            ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20' 
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-transparent hover:border-slate-300 dark:hover:border-slate-700'
-                        }`}
-                      >
-                        وضع الاستشفاء
-                      </button>
-                      <button 
-                        onClick={() => setStep(1)}
-                        className="px-8 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 dark:hover:bg-slate-100 shadow-xl active:scale-95 transition-all"
-                      >
-                        التالي
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="space-y-6 text-right">
-                    <div>
-                      <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-3">أي مستوى حققت اليوم؟</span>
-                      <div className="grid grid-cols-3 gap-2">
-                        <button 
-                          onClick={() => setQData({...qData, goalLevel: 'min'})}
-                          className={`px-3 py-3 rounded-xl text-[9px] font-black border transition-all ${qData.goalLevel === 'min' ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800 text-slate-400 uppercase tracking-tight'}`}
-                        >
-                          <span className="block opacity-50 mb-0.5">الحد الأدنى</span>
-                          {habit.minGoal}
-                        </button>
-                        <button 
-                          onClick={() => setQData({...qData, goalLevel: 'expected'})}
-                          className={`px-3 py-3 rounded-xl text-[9px] font-black border transition-all ${qData.goalLevel === 'expected' ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800 text-slate-400 uppercase tracking-tight'}`}
-                        >
-                          <span className="block opacity-50 mb-0.5">المتوقع</span>
-                          {habit.expectedGoal}
-                        </button>
-                        <button 
-                          onClick={() => setQData({...qData, goalLevel: 'exceeded'})}
-                          className={`px-3 py-3 rounded-xl text-[9px] font-black border transition-all ${qData.goalLevel === 'exceeded' ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800 text-slate-400 uppercase tracking-tight'}`}
-                        >
-                          <span className="block opacity-50 mb-0.5">ممتاز</span>
-                          {habit.expectedGoal}+
-                        </button>
-                      </div>
+                 <div className="absolute top-0 right-0 w-full h-32 bg-gradient-to-b from-blue-500/5 to-transparent pointer-events-none" />
+                 
+                 <button 
+                  onClick={() => setShowDetails(false)}
+                  className="absolute top-6 right-1/2 translate-x-1/2 w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-blue-500 transition-all z-40 shadow-sm border border-slate-100 dark:border-slate-700"
+                >
+                  <Plus className="w-5 h-5 rotate-45" />
+                </button>
+
+                 <div className="flex-1 overflow-y-auto no-scrollbar pt-8 w-full text-right px-2">
+                    <div className="flex flex-col items-center mb-8">
+                       <div className="w-20 h-20 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-500 mb-4 border-4 border-white dark:border-slate-800 shadow-xl">
+                          {React.createElement((LucideIcons as any)[habit.icon || 'CheckCircle2'] || LucideIcons.CheckCircle2, { className: 'w-10 h-10' })}
+                       </div>
+                       <h3 className="text-2xl font-black text-slate-800 dark:text-white px-4 text-center">{habit.name}</h3>
+                       <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mt-1">{habit.category}</p>
                     </div>
 
-                    <div>
-                      <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-3">كيف كان تركيزك؟</span>
-                      <div className="flex gap-2 flex-wrap justify-end flex-row-reverse">
-                        {[1, 2, 3, 4, 5].map(score => (
-                          <button 
-                            key={`focus-${score}`}
-                            onClick={() => setQData({...qData, focus: score})}
-                            className={`w-10 h-10 rounded-xl text-[12px] font-black border transition-all flex items-center justify-center ${qData.focus === score ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800 text-slate-400 hover:border-blue-200'}`}
-                          >
-                            {score}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-3">هل كنت في الموعد؟</span>
-                      <div className="flex gap-2 justify-end">
-                        <button 
-                          onClick={() => setQData({...qData, onTime: true})}
-                          className={`px-4 py-2 rounded-xl text-[10px] font-bold border transition-all ${qData.onTime ? 'bg-blue-500 text-white border-blue-500' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500'}`}
-                        >نعم</button>
-                        <button 
-                          onClick={() => setQData({...qData, onTime: false})}
-                          className={`px-4 py-2 rounded-xl text-[10px] font-bold border transition-all ${!qData.onTime ? 'bg-blue-500 text-white border-blue-500' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500'}`}
-                        >لا</button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-3">هل قضيت الوقت المتوقع؟ ({habit.duration || 'غير محدد'} د)</span>
-                      <div className="flex gap-2 justify-end mb-3">
-                        <button 
-                          onClick={() => setQData({...qData, onExpectedTime: true, actualTime: habit.duration || ''})}
-                          className={`px-4 py-2 rounded-xl text-[10px] font-bold border transition-all ${qData.onExpectedTime ? 'bg-blue-500 text-white border-blue-500' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500'}`}
-                        >نعم</button>
-                        <button 
-                          onClick={() => setQData({...qData, onExpectedTime: false})}
-                          className={`px-4 py-2 rounded-xl text-[10px] font-bold border transition-all ${!qData.onExpectedTime ? 'bg-blue-500 text-white border-blue-500' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500'}`}
-                        >لا</button>
-                      </div>
-                      {!qData.onExpectedTime && (
-                        <motion.div 
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700"
-                        >
-                           <input 
-                              type="text" 
-                              placeholder="قد ايه تقريباً؟"
-                              value={qData.actualTime}
-                              onChange={(e) => setQData({...qData, actualTime: e.target.value})}
-                              className="flex-1 bg-transparent text-right text-xs font-bold font-mono outline-none dark:text-slate-200"
-                           />
-                           <span className="text-[10px] font-black text-slate-400">دقيقة</span>
-                        </motion.div>
+                    <div className="space-y-6">
+                      {(habit as any).motivation && (
+                        <div className="bg-emerald-50 dark:bg-emerald-900/10 p-6 rounded-[2.5rem] border border-emerald-100 dark:border-emerald-900/20">
+                          <p className="text-[10px] font-black text-emerald-600 mb-2 uppercase tracking-widest flex items-center gap-2 justify-end">الحافز المباشر <TrendingUp className="w-3 h-3" /></p>
+                          <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{(habit as any).motivation}</p>
+                        </div>
                       )}
-                    </div>
+                      
+                      {(habit as any).replacingHabit && (
+                        <div className="bg-orange-50 dark:bg-orange-900/10 p-6 rounded-[2.5rem] border border-orange-100 dark:border-orange-900/20">
+                          <p className="text-[10px] font-black text-orange-600 mb-2 uppercase tracking-widest flex items-center gap-2 justify-end">استبدال <CheckCircle2 className="w-3 h-3" /></p>
+                          <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{(habit as any).replacingHabit}</p>
+                        </div>
+                      )}
 
-                    <div className="flex items-center justify-between pt-4">
-                      <button 
-                        onClick={() => setStep(0)}
-                        className="text-[10px] font-black text-slate-400 dark:text-slate-500 underline underline-offset-4"
-                      >رجوع</button>
-                      <button 
-                        onClick={() => handleComplete(note.includes('تسجيل') ? 'voice' : 'text')}
-                        className="px-8 py-3 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 shadow-xl shadow-blue-500/20 active:scale-95 transition-all"
-                      >تأكيد نهائي</button>
+                      <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-[2.5rem] space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="text-right">
+                             <p className="text-[9px] font-black text-slate-400 mb-1 uppercase">التكرار</p>
+                             <p className="text-xs font-black text-slate-700 dark:text-white">{habit.frequency}</p>
+                          </div>
+                          <div className="text-right">
+                             <p className="text-[9px] font-black text-slate-400 mb-1 uppercase">الوقت</p>
+                             <p className="text-xs font-black text-slate-700 dark:text-white">{habit.time || 'غير محدد'}</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-700 pt-4">
+                          <div className="text-right">
+                             <p className="text-[9px] font-black text-slate-400 mb-1 uppercase">المدة</p>
+                             <p className="text-xs font-black text-slate-700 dark:text-white">{habit.duration || 'غير محدد'}</p>
+                          </div>
+                          <div className="text-right">
+                             <p className="text-[9px] font-black text-slate-400 mb-1 uppercase">الموقع</p>
+                             <p className="text-xs font-black text-slate-700 dark:text-white">{(habit as any).order || 'غير محدد'}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                         <div className="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-[2.5rem] border border-blue-100 dark:border-blue-900/20 text-center">
+                            <p className="text-[9px] font-black text-blue-500 mb-2 uppercase tracking-widest">الحد الأدنى</p>
+                            <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{habit.minGoal}</p>
+                         </div>
+                         <div className="bg-blue-500 p-5 rounded-[2.5rem] text-center shadow-lg shadow-blue-500/20">
+                            <p className="text-[9px] font-black text-blue-100 mb-2 uppercase tracking-widest">المتوقع</p>
+                            <p className="text-xs font-bold text-white">{habit.expectedGoal}</p>
+                         </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        {habit.nearGoal && (
+                          <div className="p-6 bg-slate-900 text-white rounded-[3rem] shadow-xl relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full -translate-y-12 translate-x-12 blur-xl" />
+                            <div className="relative">
+                              <div className="flex items-center gap-2 mb-3 justify-end text-blue-400">
+                                 <span className="text-[10px] font-black uppercase tracking-widest">الهدف القريب</span>
+                                 <Target className="w-4 h-4" />
+                              </div>
+                              <p className="text-sm font-black text-right mb-2">{habit.nearGoal.target} - {habit.nearGoal.description}</p>
+                              <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                                 <div className="h-full bg-blue-500 w-1/3" />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {habit.awayGoal && (
+                          <div className="p-6 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-[3rem] shadow-sm relative overflow-hidden group">
+                            <div className="relative">
+                              <div className="flex items-center gap-2 mb-3 justify-end text-slate-400">
+                                 <span className="text-[10px] font-black uppercase tracking-widest">الهدف البعيد</span>
+                                 <Flag className="w-4 h-4" />
+                              </div>
+                              <p className="text-sm font-black text-right text-slate-800 dark:text-white mb-2">{habit.awayGoal.targetDate} - {habit.awayGoal.description}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex gap-3 pt-4 mb-10">
+                         <button 
+                           onClick={() => { setShowDetails(false); onEdit(habit); }}
+                           className="flex-1 h-14 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-white rounded-full font-black text-xs uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all shadow-sm"
+                         >
+                           تعديل
+                         </button>
+                         <button 
+                           onClick={() => { setShowDetails(false); onDelete(habit.id); }}
+                           className="flex-1 h-14 bg-red-50 dark:bg-red-900/10 text-red-500 rounded-full font-black text-xs uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all border border-red-100 dark:border-red-900/20"
+                         >
+                           حذف
+                         </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                 </div>
               </motion.div>
             )}
           </AnimatePresence>
-
-          {isCompletedToday && (
-            <div className="mt-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-blue-500">
-                <div className="w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center">
-                  <Check className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-widest">مهمة مكتملة</span>
-              </div>
-            </div>
-          )}
         </motion.div>
-      </div>
-    </motion.div>
+
+      {/* Relapse & Note Inputs - Float outside */}
+      <AnimatePresence>
+          {showRelapseInput && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="fixed inset-4 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 z-50 bg-white dark:bg-slate-900 p-8 rounded-[3rem] shadow-[0_20px_60px_-10px_rgba(0,0,0,0.3)] border border-slate-100 dark:border-slate-800 text-right w-[calc(100%-2rem)] sm:w-[400px] max-h-[90vh] flex flex-col justify-center"
+              >
+                  <div className="flex justify-between items-center mb-6">
+                     <button onClick={() => setShowRelapseInput(false)} className="text-slate-400 hover:text-slate-600 bg-slate-100 dark:bg-slate-800 w-10 h-10 rounded-full flex items-center justify-center"><AlertCircle className="w-5 h-5" /></button>
+                     <h4 className="text-xl font-black text-orange-500">وقعت ليه؟</h4>
+                  </div>
+                  <textarea 
+                    value={relapseReason}
+                    onChange={(e) => setRelapseReason(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 p-5 rounded-3xl border border-slate-100 dark:border-slate-700 outline-none focus:border-orange-500 text-right placeholder:text-slate-400 mb-6 font-bold text-sm h-32 resize-none text-slate-800 dark:text-slate-200 shadow-inner"
+                    placeholder="اكتب السبب بوضوح عشان تتعلم منه وتتجنبه المرة الجاية..."
+                  />
+                  <button onClick={() => { onRelapse(habit.id, relapseReason); setShowRelapseInput(false); setRelapseReason(''); }} className="w-full py-4 rounded-full bg-orange-500 text-white font-black text-sm uppercase tracking-widest hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/30">
+                     تأكيد الانتكاسة
+                  </button>
+              </motion.div>
+          )}
+
+          {showNoteInput && (
+             <motion.div 
+               initial={{ opacity: 0, scale: 0.9 }}
+               animate={{ opacity: 1, scale: 1 }}
+               exit={{ opacity: 0, scale: 0.9 }}
+               transition={{ duration: 0.8, ease: "easeInOut" }}
+               className="fixed inset-4 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 z-50 bg-white dark:bg-slate-900 p-8 rounded-[3rem] shadow-[0_20px_60px_-10px_rgba(0,0,0,0.3)] border border-slate-100 dark:border-slate-800 text-right w-[calc(100%-2rem)] sm:w-[400px] max-h-[90vh] flex flex-col justify-center"
+             >
+                {step === -1 ? (
+                  <div className="space-y-6">
+                    <h4 className="text-xl font-black text-slate-800 dark:text-white mb-6 text-center">وصلت لفين؟</h4>
+                    <div className="flex flex-col gap-3">
+                       <button onClick={() => { setQData({...qData, goalLevel: 'exceeded'}); recordImmediately(); }} className="py-4 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full text-xs font-black uppercase flex items-center justify-center gap-2 border border-emerald-100 dark:border-emerald-800 active:scale-95 transition-transform">
+                         تخطيته <span className="text-lg">🔥</span> 
+                       </button>
+                       <button onClick={() => { setQData({...qData, goalLevel: 'expected'}); recordImmediately(); }} className="py-4 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-xs font-black uppercase flex items-center justify-center gap-2 border-2 border-blue-200 dark:border-blue-800 active:scale-95 transition-transform">
+                         المتوقع <span className="text-lg">🎯</span> 
+                       </button>
+                       <button onClick={() => { setQData({...qData, goalLevel: 'min'}); recordImmediately(); }} className="py-4 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-full text-xs font-black uppercase flex items-center justify-center gap-2 border border-orange-100 dark:border-orange-800 active:scale-95 transition-transform">
+                         الأدنى <span className="text-lg">🐌</span> 
+                       </button>
+                    </div>
+                    <button onClick={() => setShowNoteInput(false)} className="w-full text-center text-xs font-black text-slate-400 hover:text-slate-600 mt-6 underline uppercase tracking-widest pt-4">إلغاء</button>
+                  </div>
+                ) : step === 0 ? (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center px-2">
+                       <button onClick={() => setShowNoteInput(false)} className="text-slate-400 hover:text-red-500 w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center transition-colors"><Trash2 className="w-5 h-5" /></button>
+                       <span className="text-[10px] uppercase font-black tracking-widest text-blue-500 bg-blue-50 dark:bg-blue-900/40 px-3 py-1 rounded-full">Medical Note</span>
+                    </div>
+                    
+                    <div className="bg-slate-50 dark:bg-slate-800/80 rounded-[2rem] p-4 flex flex-col gap-2 border border-slate-100 dark:border-slate-800 shadow-inner">
+                        <input 
+                          type="text"
+                          value={noteTitle}
+                          onChange={(e) => setNoteTitle(e.target.value)}
+                          placeholder="عنوان الموضوع (مثلاً Cranial Nerves)"
+                          className="w-full bg-transparent outline-none text-right placeholder:text-slate-400 font-serif text-2xl font-black text-slate-800 dark:text-slate-100"
+                        />
+                        <input 
+                          type="text"
+                          value={noteSubtitle}
+                          onChange={(e) => setNoteSubtitle(e.target.value)}
+                          placeholder="العنوان الفرعي (مثلاً Functions)"
+                          className="w-full bg-transparent outline-none text-right placeholder:text-slate-400/70 font-sans text-base font-medium text-slate-600 dark:text-slate-300"
+                        />
+                        <div className="w-full h-px bg-slate-200 dark:bg-slate-700 my-2"></div>
+                        <textarea 
+                          value={note}
+                          onChange={(e) => setNote(e.target.value)}
+                          className="w-full bg-transparent outline-none text-right font-sans text-sm h-32 resize-none text-slate-800 dark:text-slate-200 placeholder:text-slate-400 leading-relaxed"
+                          placeholder="أكتب ملاحظاتك وتفاصيلك هنا..."
+                        />
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                      <button onClick={startRecording} className="w-14 h-14 rounded-[1.5rem] bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center hover:bg-indigo-100 transition-colors shadow-sm border border-indigo-100 dark:border-indigo-800">
+                        {isRecording ? <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse" /> : <Mic className="w-6 h-6" />}
+                      </button>
+                      <button onClick={() => setStep(1)} className="flex-1 rounded-[1.5rem] bg-blue-600 text-white font-black text-xs uppercase hover:bg-blue-700 transition-colors shadow-xl shadow-blue-500/30 hover:-translate-y-0.5">
+                        التالي
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-8">
+                    <h4 className="text-xl font-black text-blue-500 text-center mb-4">تفاصيل التقييم</h4>
+                    <div className="space-y-6">
+                      <div className="bg-slate-50 dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700">
+                        <label className="text-xs font-black uppercase text-slate-500 tracking-widest block mb-4 text-center">التركيز</label>
+                        <input type="range" min="1" max="5" value={qData.focus} onChange={(e) => setQData({...qData, focus: parseInt(e.target.value)})} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                        <div className="flex justify-between text-[10px] font-black text-slate-400 mt-3 px-1"><span>ضعيف</span><span>ممتاز</span></div>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                       <button onClick={() => setStep(0)} className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center text-[10px] font-black hover:bg-slate-200 transition-colors">رجوع</button>
+                       <button onClick={() => handleComplete('text')} className="flex-1 py-4 rounded-full bg-emerald-500 text-white font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/30">
+                         تأكيد الإنجاز
+                       </button>
+                    </div>
+                  </div>
+                )}
+             </motion.div>
+          )}
+
+          {/* Backdrop */}
+          {(showRelapseInput || showNoteInput) && (
+              <motion.div 
+                 initial={{ opacity: 0 }}
+                 animate={{ opacity: 1 }}
+                 exit={{ opacity: 0 }}
+                 onClick={() => { setShowRelapseInput(false); setShowNoteInput(false); }}
+                 className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40"
+              />
+          )}
+      </AnimatePresence>
+    </div>
   );
 });
 
