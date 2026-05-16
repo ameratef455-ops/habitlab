@@ -4,7 +4,6 @@ import {
   ArrowRight, 
   Play, 
   Square, 
-  Mic, 
   Brush, 
   Zap, 
   Bell,
@@ -29,6 +28,7 @@ interface ModesViewProps {
   setGlobalRecoveryMode?: (val: boolean) => void;
   userName?: string;
   showFeedback?: (msg: string, type?: 'success' | 'info' | 'alert', showUndo?: boolean) => void;
+  requestConfirm: (title: string, description: string, icon: React.ReactNode, onConfirm: () => void) => void;
 }
 
 export const ModesView: React.FC<ModesViewProps> = ({ 
@@ -42,15 +42,23 @@ export const ModesView: React.FC<ModesViewProps> = ({
   globalRecoveryMode,
   setGlobalRecoveryMode,
   userName,
-  showFeedback
+  showFeedback,
+  requestConfirm
 }) => {
   const [activeMode, setActiveMode] = useState<'hub' | 'focus' | 'dreams' | 'recovery'>('hub');
   
   const [timerText, setTimerText] = useState('00:00:00');
-  const [isRunning, setIsRunning] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [pauseStartTime, setPauseStartTime] = useState<number | null>(null);
-  const [totalPausedMs, setTotalPausedMs] = useState(0);
+  const [isRunning, setIsRunning] = useState(() => localStorage.getItem('aura-focus-running') === 'true');
+  const [isPaused, setIsPaused] = useState(() => localStorage.getItem('aura-focus-paused') === 'true');
+  const [pauseStartTime, setPauseStartTime] = useState<number | null>(() => {
+      const saved = localStorage.getItem('aura-focus-pause-start-time');
+      return saved ? parseInt(saved) : null;
+  });
+  const [totalPausedMs, setTotalPausedMs] = useState(() => {
+      const saved = localStorage.getItem('aura-focus-total-paused-ms');
+      return saved ? parseInt(saved) : 0;
+  });
+  
   const [sessionFeedback, setSessionFeedback] = useState('');
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [tag, setTag] = useState('عام');
@@ -70,11 +78,26 @@ export const ModesView: React.FC<ModesViewProps> = ({
   const handleDeleteNote = (id: string) => {
     setNotesList(notesList.filter(n => n.id !== id));
   };
-  const [isRecording, setIsRecording] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<string>('');
-  const [expectedTimeMinutes, setExpectedTimeMinutes] = useState<string>('30');
-  const [actualStartTimeIso, setActualStartTimeIso] = useState<string>('');
-  const startTime = useRef<number | null>(null);
+
+  const [selectedTask, setSelectedTask] = useState(() => localStorage.getItem('aura-focus-task') || '');
+  const [expectedTimeMinutes, setExpectedTimeMinutes] = useState(() => localStorage.getItem('aura-focus-expected-minutes') || '30');
+  const [actualStartTimeIso, setActualStartTimeIso] = useState(() => localStorage.getItem('aura-focus-start-time-iso') || '');
+  const startTime = useRef<number | null>(() => {
+      const saved = localStorage.getItem('aura-focus-start-time');
+      return saved ? parseInt(saved) : null;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('aura-focus-running', isRunning.toString());
+    localStorage.setItem('aura-focus-paused', isPaused.toString());
+    localStorage.setItem('aura-focus-pause-start-time', pauseStartTime ? pauseStartTime.toString() : '');
+    localStorage.setItem('aura-focus-total-paused-ms', totalPausedMs.toString());
+    localStorage.setItem('aura-focus-task', selectedTask);
+    localStorage.setItem('aura-focus-expected-minutes', expectedTimeMinutes);
+    localStorage.setItem('aura-focus-start-time-iso', actualStartTimeIso);
+    localStorage.setItem('aura-focus-start-time', startTime.current ? startTime.current.toString() : '');
+  }, [isRunning, isPaused, pauseStartTime, totalPausedMs, selectedTask, expectedTimeMinutes, actualStartTimeIso]);
+
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -116,11 +139,29 @@ export const ModesView: React.FC<ModesViewProps> = ({
   };
 
   const handleBackFromMode = () => {
-    if (isRunning) {
-      if (window.confirm("كدا هترجع من الاول وتخسر تركيزك، متأكد؟")) {
-        setIsRunning(false);
-        setIsPaused(false);
-        setActiveMode('hub');
+    if (activeMode === 'focus') {
+      if (isRunning) {
+        requestConfirm(
+          'كدا هترجع من الاول وتخسر تركيزك، متأكد؟ ⚠️',
+          'الخروج الآن سيؤدي لإلغاء الجلسة الحالية ومسح أي ملاحظات لم يتم حفظها.',
+          <Zap className="w-12 h-12 text-blue-500 mb-6 mx-auto" />,
+          () => {
+            setIsRunning(false);
+            setIsPaused(false);
+            setActiveMode('hub');
+          }
+        );
+      } else {
+        if (selectedTask || notesList.length > 0) {
+          requestConfirm(
+            'متأكد إنك عايز تخرج؟ ⚠️',
+            'كل اللي كتبته في الجلسة الحالية هيتمسح.',
+            <RotateCcw className="w-12 h-12 text-amber-500 mb-6 mx-auto" />,
+            () => setActiveMode('hub')
+          );
+        } else {
+          setActiveMode('hub');
+        }
       }
     } else {
       setActiveMode('hub');
@@ -172,8 +213,12 @@ export const ModesView: React.FC<ModesViewProps> = ({
     // Append the encouragement to the actual feedback text saved 
     sysFeedback = `${encouragement}\n\n[ما تم كتابته]: ${sessionFeedback}`;
 
+    // Find if task is a habit to associate habitId
+    const associatedHabit = habits.find(h => h.name === selectedTask);
+
     const sessionData = {
        id: Date.now().toString(),
+       habitId: associatedHabit?.id,
        task: selectedTask,
        expectedMinutes: expected,
        actualMinutes,
@@ -205,26 +250,7 @@ export const ModesView: React.FC<ModesViewProps> = ({
     }
   };
 
-  const startRecording = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.lang = 'ar-SA';
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.onstart = () => setIsRecording(true);
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setCurrentNote(prev => prev + (prev ? ' ' : '') + transcript);
-        setIsRecording(false);
-      };
-      recognition.onerror = () => setIsRecording(false);
-      recognition.onend = () => setIsRecording(false);
-      recognition.start();
-    } else {
-      alert('المتصفح لا يدعم التسجيل الصوتي.');
-    }
-  };
+// Removed startRecording here
 
   if (activeMode === 'recovery') {
     return (
@@ -454,11 +480,8 @@ export const ModesView: React.FC<ModesViewProps> = ({
                   </div>
 
                   <div className="flex gap-3">
-                    <button onClick={startRecording} className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors shadow-sm ${isRecording ? 'bg-red-50 text-red-500' : 'bg-slate-50 dark:bg-slate-900 text-blue-500 border border-slate-100 dark:border-slate-800'}`}>
-                      <Mic className={`w-6 h-6 ${isRecording ? 'animate-pulse' : ''}`} />
-                    </button>
                     <div className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-full flex items-center justify-end px-6 text-xs font-bold text-slate-400">
-                      {isRecording ? 'جاري الاستماع...' : 'ملاحظات صوتية جاهزة'}
+                      ملاحظات نصية جاهزة
                     </div>
                   </div>
                </motion.div>
@@ -493,7 +516,7 @@ export const ModesView: React.FC<ModesViewProps> = ({
 
   if (activeMode === 'dreams') {
     return (
-      <div className="fixed inset-0 z-[200] bg-white dark:bg-slate-950 flex flex-col w-full h-full overflow-hidden font-sans">
+      <div className="fixed inset-0 z-[200] bg-white dark:bg-slate-950 flex flex-col w-full h-full overflow-y-auto no-scrollbar font-sans">
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-blue-500 font-black animate-pulse">جاري تحميل مساحة الأحلام...</div>}>
           <AuraDreamsView 
             onBack={() => setActiveMode('hub')} 

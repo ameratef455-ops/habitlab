@@ -51,6 +51,9 @@ interface AnalysisViewProps {
   userTitle: string;
   focusSessions?: any[];
   dreamSessions?: any[];
+  onDeleteFocusSession?: (id: string) => void;
+  onDeleteDreamSession?: (id: string) => void;
+  requestConfirm?: (title: string, description: string, icon: React.ReactNode, onConfirm: () => void) => void;
 }
 
 export const AnalysisView: React.FC<AnalysisViewProps> = ({
@@ -60,6 +63,9 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
   userTitle,
   focusSessions = [],
   dreamSessions = [],
+  onDeleteFocusSession,
+  onDeleteDreamSession,
+  requestConfirm,
 }) => {
   const [showInfo, setShowInfo] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<
@@ -332,7 +338,20 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
              
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                {focusSessions.slice().reverse().map((session, i) => (
-                 <div key={session.id || `f-${i}`} className="bg-slate-50 border border-slate-100 rounded-2xl p-5 shadow-sm space-y-3">
+                 <div key={session.id || `f-${i}`} className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3 group relative">
+                    <button 
+                      onClick={() => {
+                        requestConfirm?.(
+                          'حذف جلسة التركيز؟',
+                          'سيتم حذف سجل هذه الجلسة نهائياً.',
+                          <Zap className="w-12 h-12 text-blue-500 mb-6 mx-auto" />,
+                          () => onDeleteFocusSession?.(session.id)
+                        );
+                      }}
+                      className="absolute top-2 left-2 w-7 h-7 rounded-lg bg-[#3270bf] text-white opacity-100 transition-all flex items-center justify-center hover:scale-110 shadow-sm z-10"
+                    >
+                      <LucideIcons.Trash2 className="w-4 h-4" />
+                    </button>
                     <div className="flex justify-between items-center mb-2">
                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Date(session.endTime).toLocaleDateString('ar-EG', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
                        <span className="bg-blue-100/50 text-blue-600 px-3 py-1 rounded-full text-xs font-black">{session.task}</span>
@@ -383,7 +402,20 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
 
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                {dreamSessions.slice().reverse().map((session, i) => (
-                 <div key={session.id || `d-${i}`} className="bg-slate-50 border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4 overflow-hidden group">
+                 <div key={session.id || `d-${i}`} className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4 overflow-hidden group relative">
+                    <button 
+                      onClick={() => {
+                        requestConfirm?.(
+                          'حذف جلسة الأحلام؟',
+                          'سيتم حذف سجل هذه الجلسة والرسومات المرتبطة بها نهائياً.',
+                          <LucideIcons.Brush className="w-12 h-12 text-blue-500 mb-6 mx-auto" />,
+                          () => onDeleteDreamSession?.(session.id)
+                        );
+                      }}
+                      className="absolute top-2 left-2 w-7 h-7 rounded-lg bg-[#2c6dc3] text-white opacity-100 transition-all flex items-center justify-center hover:scale-110 shadow-sm z-10"
+                    >
+                      <LucideIcons.Trash2 className="w-4 h-4" />
+                    </button>
                     <div className="flex justify-between items-center px-1">
                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Date(session.timestamp || Date.now()).toLocaleDateString('ar-EG', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
                        <div className="flex items-center gap-1 bg-purple-100/50 text-purple-600 px-3 py-1 rounded-full text-xs font-black">
@@ -411,7 +443,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100/50">
                        <div className="flex items-center gap-1 text-[10px] font-black text-emerald-500 uppercase">
                           <LucideIcons.Award className="w-3 h-3" />
-                          <span>+{session.points || 0} XP</span>
+                          {session.points > 0 && <span className="flex items-center gap-1">+{session.points} XP</span>}
                        </div>
                        {session.canvasImage && (
                           <div className="text-[10px] font-black text-purple-300 uppercase tracking-widest flex items-center gap-1">

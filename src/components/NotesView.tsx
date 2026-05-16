@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowRight, ChevronRightIcon, FileText, Plus, BookOpen, Tag, Mic, MicOff, Trash2, Edit3, Globe, Zap, Brush, LayoutGrid, Target } from 'lucide-react';
+import { ArrowRight, ChevronRightIcon, FileText, Plus, BookOpen, Tag, Mic, MicOff, Trash2, Edit3, Globe, Zap, Brush, LayoutGrid, Target, Square } from 'lucide-react';
 import { Habit } from '../types';
 
 interface InternalNotesProps {
@@ -40,6 +40,41 @@ export const NotesView: React.FC<InternalNotesProps> = ({
   const [composeHabitId, setComposeHabitId] = useState<string>('general');
   const [composeEditId, setComposeEditId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false); // True audio recording
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setComposeText(prev => prev + (prev ? '\n' : '') + `[رابط الملاحظة الصوتية: ${audioUrl}]`);
+      };
+      
+      mediaRecorderRef.current.start();
+      setIsVoiceRecording(true);
+    } catch (e) {
+      console.error('Mic Access Error:', e);
+      alert('تعذر الوصول للميكروفون.');
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && isVoiceRecording) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      setIsVoiceRecording(false);
+    }
+  };
 
   const startVoiceDictation = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -311,9 +346,19 @@ export const NotesView: React.FC<InternalNotesProps> = ({
                             <span className="text-[10px] font-bold text-slate-400">{new Date(note.date).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' })}</span>
                          </div>
                          <div className="flex gap-2">
-                           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={(e) => { e.stopPropagation(); openEditNote(note); }} className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-500 transition-all hover:bg-blue-600 hover:text-white"><Edit3 className="w-4 h-4" /></button>
-                              <button onClick={(e) => { e.stopPropagation(); handleDeleteNote(note); }} className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 transition-all hover:bg-blue-600 hover:text-white"><Trash2 className="w-4 h-4" /></button>
+                           <div className="flex gap-2 opacity-100 sm:opacity-60 group-hover:opacity-100 transition-opacity">
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); openEditNote(note); }} 
+                                className="w-8 h-8 rounded-full flex items-center justify-center transition-all bg-blue-500 text-white hover:scale-110 active:scale-90 shadow-md"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleDeleteNote(note); }} 
+                                className="w-8 h-8 rounded-full flex items-center justify-center transition-all bg-rose-500 text-white hover:scale-110 active:scale-90 shadow-md"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                            </div>
                            <ChevronRightIcon className={`w-5 h-5 text-slate-300 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                          </div>
@@ -413,13 +458,23 @@ export const NotesView: React.FC<InternalNotesProps> = ({
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                   <button 
-                     onClick={startVoiceDictation} 
-                     disabled={isRecording}
-                     className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-blue-500'}`}
-                   >
-                     {isRecording ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-                   </button>
+                   <div className="flex gap-2">
+                     <button 
+                       onClick={isVoiceRecording ? stopVoiceRecording : startVoiceRecording} 
+                       className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isVoiceRecording ? 'bg-red-500 text-white animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-blue-500'}`}
+                       title="تسجيل صوتي (ملف)"
+                     >
+                       {isVoiceRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                     </button>
+                     <button 
+                       onClick={startVoiceDictation} 
+                       disabled={isRecording || isVoiceRecording}
+                       className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isRecording ? 'bg-blue-500 text-white animate-pulse shadow-[0_0_15px_rgba(59,130,246,0.5)]' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-blue-500'}`}
+                       title="تحويل الصوت لنص"
+                     >
+                       <MicOff className="w-4 h-4" />
+                     </button>
+                   </div>
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">التفاصيل</label>
                 </div>
                 <textarea 

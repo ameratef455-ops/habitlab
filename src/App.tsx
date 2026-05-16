@@ -23,6 +23,8 @@ import {
   CheckCircle2,
   Trash2,
   Info,
+  Check,
+  RotateCcw,
   Zap,
   Undo2,
   Moon,
@@ -42,11 +44,13 @@ import {
   FileText,
   UserX,
 } from 'lucide-react';
+import { preloadModel } from './services/aiAnalyzer';
 import { useHabitLab } from './hooks/useHabitLab';
 import { HabitCard } from './components/HabitCard';
+import { PlanAnalyzerPopup } from './components/PlanAnalyzerPopup';
 
-const HabitModal = lazy(() => import('./components/HabitModal').then(m => ({ default: m.HabitModal })));
 const NotesView = lazy(() => import('./components/NotesView').then(m => ({ default: m.NotesView })));
+const HabitModal = lazy(() => import('./components/HabitModal').then(m => ({ default: m.HabitModal })));
 const PlannerView = lazy(() => import('./components/PlannerView').then(m => ({ default: m.PlannerView })));
 const ScheduleView = lazy(() => import('./components/ScheduleView').then(m => ({ default: m.ScheduleView })));
 const AnalysisView = lazy(() => import('./components/AnalysisView').then(m => ({ default: m.AnalysisView })));
@@ -101,7 +105,9 @@ export default function App() {
     focusSessions,
     setFocusSessions,
     dreamSessions,
-    setDreamSessions
+    setDreamSessions,
+    reports,
+    setReports
   } = useHabitLab();
 
   const handleRemoteDataSync = (remoteData: any) => {
@@ -109,7 +115,7 @@ export default function App() {
   };
 
   const { syncStatus, isSignedIn, signIn, logout, deleteSyncData, isInitializing, userProfile } = useGoogleDriveSync(
-    { habits, points, weeklyChallenge, scheduleTasks, plannerData, globalRecoveryMode, todayIsHoliday, focusSessions, dreamSessions, generalNotes },
+    { habits, points, weeklyChallenge, scheduleTasks, plannerData, globalRecoveryMode, todayIsHoliday, focusSessions, dreamSessions, generalNotes, reports },
     handleRemoteDataSync
   );
 
@@ -244,179 +250,6 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  const generatePDF = async () => {
-    try {
-      showFeedback('جار تجهيز التقرير التفصيلي... ⏳', 'info');
-      const { jsPDF } = await import('jspdf');
-      const { default: autoTable } = await import('jspdf-autotable');
-      const doc = new jsPDF();
-      
-      const width = doc.internal.pageSize.getWidth();
-      
-      // Header Background
-      doc.setFillColor(59, 130, 246); // blue-500
-      doc.rect(0, 0, width, 50, 'F');
-      
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(28);
-      doc.setFont("helvetica", "bold");
-      doc.text('AURA • FULL PROGRESS REPORT', 20, 30);
-      
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      const dateStr = new Date().toLocaleDateString('en-US', { 
-        year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
-      });
-      doc.text(`Generated on: ${dateStr}`, width - 20, 30, { align: 'right' });
-      doc.text(`User ID: ${userProfile?.name || 'Aura Developer'}`, width - 20, 35, { align: 'right' });
-
-      // Section: Summary
-      doc.setTextColor(15, 23, 42); // slate-900
-      doc.setFontSize(18);
-      doc.setFont("helvetica", "bold");
-      doc.text('1. Executive Summary', 20, 70);
-      
-      // Stats Cards Layout
-      const cardWidth = (width - 60) / 3;
-      const cardY = 80;
-      
-      const drawCard = (x: number, title: string, value: string, sub: string) => {
-        doc.setFillColor(248, 250, 252);
-        doc.setDrawColor(226, 232, 240);
-        doc.roundedRect(x, cardY, cardWidth, 40, 5, 5, 'FD');
-        doc.setFontSize(9);
-        doc.setTextColor(100, 116, 139);
-        doc.text(title, x + 5, cardY + 12);
-        doc.setTextColor(15, 23, 42);
-        doc.setFontSize(16);
-        doc.text(value, x + 5, cardY + 25);
-        doc.setFontSize(8);
-        doc.setTextColor(59, 130, 246);
-        doc.text(sub, x + 5, cardY + 34);
-      };
-
-      drawCard(20, 'Current Level', `Level ${userLevel}`, userTitle || 'Beginner');
-      drawCard(20 + cardWidth + 10, 'Aura Points', `${points}`, `Next lvl in ${Math.round(levelInfo.nextLevelPoints)} pts`);
-      const totalCompletions = habits.reduce((acc, h) => acc + (h.totalCompletions || 0), 0);
-      drawCard(20 + (cardWidth * 2) + 20, 'Total Success', `${totalCompletions}`, 'Successful Check-ins');
-
-      // Section: Skill Progress Table
-      doc.setFontSize(18);
-      doc.setTextColor(15, 23, 42);
-      doc.text('2. Skill Laboratory Status', 20, 140);
-      
-      const skillTableData = habits.map(h => [
-        h.name,
-        h.category,
-        h.streak,
-        h.totalCompletions || 0,
-        `${h.difficulty === 'easy' ? 'Easy' : h.difficulty === 'medium' ? 'Medium' : 'Hard'}`
-      ]);
-
-      autoTable(doc, {
-        startY: 150,
-        head: [['Skill Description', 'Domain', 'Streak', 'Success', 'Difficulty']],
-        body: skillTableData,
-        theme: 'striped',
-        headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255] },
-        styles: { font: 'helvetica', fontSize: 9 }
-      });
-
-      // Section: Timeline & Planning
-      doc.addPage();
-      doc.setFontSize(18);
-      doc.text('3. Timeline & 2026 Strategy', 20, 30);
-      
-      const plannerEntries = Object.entries(plannerData).filter(([_, data]: [string, any]) => data.goal || data.notes);
-      if (plannerEntries.length > 0) {
-        const plannerTableData = plannerEntries.map(([month, data]: [string, any]) => [
-          month,
-          data.goal || '-',
-          data.notes || '-'
-        ]);
-        autoTable(doc, {
-          startY: 40,
-          head: [['Month', 'Strategic Goal', 'Notes & Roadmap']],
-          body: plannerTableData,
-          theme: 'grid',
-          headStyles: { fillColor: [16, 185, 129] } // emerald-500
-        });
-      } else {
-        doc.setFontSize(10);
-        doc.setTextColor(100, 116, 139);
-        doc.text('No specialized timeline planning data recorded for 2026 yet.', 20, 45);
-      }
-
-      // Section: Sessions Analysis (Focus/Dream)
-      const lastY = (doc as any).lastAutoTable?.finalY || 60;
-      doc.setFontSize(18);
-      doc.setTextColor(15, 23, 42);
-      doc.text('4. Deep Work & Focus Sessions', 20, lastY + 20);
-      
-      const sessionsData = (focusSessions || []).slice(-10).map(s => [
-        new Date(s.timestamp).toLocaleDateString(),
-        s.type,
-        `${s.duration} min`,
-        s.notes || '-'
-      ]);
-
-      if (sessionsData.length > 0) {
-        autoTable(doc, {
-          startY: lastY + 30,
-          head: [['Date', 'Mode', 'Duration', 'Session Summary']],
-          body: sessionsData,
-          theme: 'striped',
-          headStyles: { fillColor: [147, 51, 234] } // purple-600
-        });
-      } else {
-        doc.setFontSize(10);
-        doc.setTextColor(100, 116, 139);
-        doc.text('Awaiting first focus or meditation session recording.', 20, lastY + 35);
-      }
-
-      // Section: General Intelligence Notes
-      doc.addPage();
-      doc.setFontSize(18);
-      doc.setTextColor(15, 23, 42);
-      doc.text('5. Knowledge Base & General Notes', 20, 30);
-      
-      const notesData = (generalNotes || []).map(n => [
-        new Date(n.date).toLocaleDateString(),
-        n.title,
-        n.content.substring(0, 100) + (n.content.length > 100 ? '...' : '')
-      ]);
-
-      if (notesData.length > 0) {
-        autoTable(doc, {
-          startY: 40,
-          head: [['Date', 'Entry Title', 'Content Snippet']],
-          body: notesData,
-          theme: 'plain',
-          styles: { cellPadding: 5 }
-        });
-      } else {
-        doc.setFontSize(10);
-        doc.setTextColor(100, 116, 139);
-        doc.text('Laboratory logbook is currently empty.', 20, 45);
-      }
-
-      // Footer
-      const totalPages = doc.internal.pages.length - 1;
-      for (let i = 1; i <= totalPages; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(148, 163, 184);
-        doc.text(`Page ${i} of ${totalPages}`, width / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
-      }
-      
-      doc.save(`AURA_INTEL_REPORT_${new Date().toISOString().split('T')[0]}.pdf`);
-      showFeedback('تم استخراج تقرير Aura بنجاح! 🚀', 'success');
-    } catch (err) {
-      console.error(err);
-      showFeedback('Error generating PDF report', 'alert');
-    }
-  };
-
   const [deferredPrompt, setDeferredPrompt] = useState<any>((window as any).deferredPrompt || null);
   useEffect(() => {
     const handler = (e: Event) => {
@@ -460,6 +293,7 @@ export default function App() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [showTips, setShowTips] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
+  const [showPlanAnalyzer, setShowPlanAnalyzer] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'account' | 'system' | 'management' | 'modes'>('account');
   const [zoomIcon, setZoomIcon] = useState<{ icon: string, name: string } | null>(null);
 
@@ -479,14 +313,83 @@ export default function App() {
   const [glowActivated, setGlowActivated] = useState(false);
   const [habitToEdit, setHabitToEdit] = useState<Habit | undefined>();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  // Welcome messages
+  const getWelcomeMessage = (name?: string) => {
+    const userName = name ? name.split(' ')[0] : null;
+    const messages = userName ? [
+      `أحلى مسا عليك يا ${userName}، الـ Aura بتاعك مستني إنجاز النهاردة! 🔥`,
+      `عاش يا ${userName}، النهاردة يوم جديد عشان تثبت لنفسك إنك تقدر. 💪`,
+      `يا ${userName}، مختبرك مفتوح وجاهز للتجارب.. وريني الهمة! 🧪`,
+      `أهلاً يا ${userName}، فاكر هدفك؟ النهاردة خطوة جديدة ناحيته. 🎯`,
+      `منور يا برو ${userName}، Aura Hub متشوقة لنتائج النهاردة! 🌌`,
+      `يا ${userName}، مفيش وقت للكسل، العالم مستني إنجازاتك. 🚀`,
+      `أهلاً بك يا ${userName}، الاستمرارية هي اللي بتعمل الفرق.. استمر! ✨`,
+      `منور المكان يا ${userName}، جاهز ترفع مستواك النهاردة؟ 📈`,
+      `يا ${userName}، كل مهارة بتتعلمها بتقربك من القمة.. دوس! 🏔️`,
+      `أهلاً ${userName}، خلي النهاردة يوم استثنائي في Aura Lab. 🛠️`,
+      `يا بطل ${userName}، الـ Streak بتاعك أمانة في إيدك.. حافظ عليه! 🔋`,
+      `منورنا يا ${userName}، Aura فخور بيك جداً وبكل خطوة بتعملها. ❤️`,
+      `يا ${userName}، إنت فنان في إدارة وقتك.. وريني إبداعك النهاردة. 🎨`,
+      `أهلاً ${userName}، النهاردة فرصتك عشان تكسر الروتين وتنجز. 💥`,
+      `يا ${userName}، الـ Aura بتاعك بيلمع النهاردة.. كمله بالإنجاز! 🌟`,
+      `منور يا ${userName}، جاهز لـ Deep Work session تخلص فيها اللي وراك؟ 🧠`,
+      `يا ${userName}، الثبات على المبدأ بيصنع المعجزات.. إثبت! ⚓`,
+      `أهلاً يا ${userName}، خطط، نفذ، واحتفل بنجاحك في Aura. 🎇`,
+      `يا ${userName}، إنت المهندس بتاع حياتك.. ابنيها صح! 🏗️`,
+      `منور يا ${userName}، يوم سعيد ومليان بالمهارات والإنجازات. 🌅`
+    ] : [
+      `أهلاً بك في Aura، رحلة التغيير بتبدأ بخطوة.. جاهز؟ ✨`,
+      `منور Aura يا بطل، مستعد نكسر أرقام قياسية النهاردة؟ 🚀`,
+      `أهلاً بيك، وجودك هنا معناه إنك قررت تكون أفضل نسخة من نفسك. 💎`,
+      `يا بطل، Aura كله تحت أمرك عشان تحقق أهدافك. 🛠️`,
+      `أهلاً بك، النهاردة يوم جديد وفرص جديدة للإنجاز. 🎯`,
+      `منور المكان، جاهز تطور مهاراتك النهاردة؟ 📈`,
+      `يا بطل، الطريق للقمة محتاج التزام، وأنت قدها! 💪`,
+      `أهلاً بك، Aura هو مختبرك الخاص للنمو. 🧪`,
+      `منور يا بطل، مهاراتك بتتحسن بفضل استمرارك. 🔥`,
+      `يا بطل، إنجازاتك الصغيرة بتبني مستقبل عظيم. 🏗️`,
+      `أهلاً بك، كل مهارة بتضيفها هي لبنة في طريق نجاحك. 🧱`,
+      `منور يا بطل، جاهز نواجه تحديات النهاردة؟ 🌊`,
+      `يا بطل، Aura فخور جداً بتقدمك والـ Streak بتاعك. 🔋`,
+      `أهلاً بك، تذكر دائماً: أنت من يضع التوقعات، وأنت من يحققها. 🧠`,
+      `منور يا بطل، استمر في السعي، النتيجة هتكون مبهرة. 🌈`,
+      `يا بطل، Aura هو شريكك في رحلة التميز. 🤝`,
+      `أهلاً بك، كن فخوراً بكل خطوة بتخطوها. 👣`,
+      `منور يا بطل، جاهز تخلي النهاردة يوم استثنائي؟ ⚡`,
+      `يا بطل، الاستمرارية هي مفتاح كل نجاح كبير. 🔑`,
+      `أهلاً بك في Aura، المكان اللي بيحول أحلامك لواقع. 🌌`
+    ];
+    return messages[Math.floor(Math.random() * messages.length)];
+  };
+
+  const welcomeMessage = useMemo(() => getWelcomeMessage(userProfile?.name), [userProfile?.name]);
   const [motivation, setMotivation] = useState<string | null>(null);
   const [showChallengeEdit, setShowChallengeEdit] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ 
     title: string; 
     description: string; 
     onConfirm: () => void; 
-    icon?: React.ReactNode 
+    icon?: React.ReactNode;
+    extraContent?: React.ReactNode;
+    confirmText?: string;
   } | null>(null);
+
+
+  const handleRequestConfirm = (title: string, description: string, icon: React.ReactNode, onConfirm: () => void) => {
+    if (!title) {
+      setConfirmAction(null);
+      return;
+    }
+    setConfirmAction({
+      title,
+      description,
+      icon,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmAction(null);
+      }
+    });
+  };
   const [feedback, setFeedback] = useState<{ msg: string; type: 'success' | 'info' | 'alert' } | null>(null);
 
   useEffect(() => {
@@ -506,7 +409,7 @@ export default function App() {
   }, [activeTab]);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo(0, 0);
   }, [activeTab]);
 
   const filteredHabits = useMemo(() => {
@@ -618,17 +521,53 @@ export default function App() {
 
   const handleDelete = (id: string) => {
     const habitToDelete = habits.find(h => h.id === id);
+    let deleteAnalysis = true;
+
     setConfirmAction({
       title: 'هل أنت متأكد؟',
       description: 'سيتم حذف المهارة وكل سجلاتها نهائياً من Aura.',
       icon: <Trash2 className="w-12 h-12 text-blue-500 mb-6 mx-auto" />,
+      extraContent: (
+        <div className="flex items-center justify-end gap-2 mb-6 cursor-pointer" onClick={() => deleteAnalysis = !deleteAnalysis}>
+          <span className="text-xs font-bold text-slate-500">حذف جميع سجلات المهارة في المختبر</span>
+          <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${deleteAnalysis ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-200'}`}>
+            {deleteAnalysis && <Check className="w-3.5 h-3.5" />}
+          </div>
+        </div>
+      ),
       onConfirm: async () => {
         if (habitToDelete?.reminderEventId) {
           await deleteEvent(habitToDelete.reminderEventId);
         }
+        if (deleteAnalysis) {
+          setFocusSessions(prev => prev.filter(s => s.habitId !== id));
+        }
         deleteHabit(id);
         setConfirmAction(null);
         showFeedback('تم حذف المهارة من السجل.', 'alert');
+      }
+    });
+  };
+
+  const handleResetHabit = (id: string) => {
+    const habit = habits.find(h => h.id === id);
+    if (!habit) return;
+
+    setConfirmAction({
+      title: 'ابدأ من جديد؟ 🚀',
+      description: `هل أنت متأكد من مسح جميع سجلات مهارة "${habit.name}"؟ سيتم تصفير عدد الأيام المتتالية وحذف كل الملاحظات المرتبطة بها.`,
+      icon: <RotateCcw className="w-12 h-12 text-blue-500 mb-6 mx-auto" />,
+      onConfirm: () => {
+        updateHabit(id, {
+          streak: 0,
+          completedDates: [],
+          notes: [],
+          relapses: [],
+          totalCompletions: 0
+        });
+        setFocusSessions(prev => (prev || []).filter(s => s.habitId !== id));
+        setConfirmAction(null);
+        showFeedback('تم تصفير سجل المهارة.. بداية جديدة موفقة! ✨');
       }
     });
   };
@@ -864,7 +803,7 @@ export default function App() {
                         <span className="text-3xl mb-2 group-hover:-translate-y-1 transition-transform">💾</span>
                         <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 tracking-widest uppercase">نسخة احتياطية</span>
                       </button>
-                      <label className="flex flex-col items-center justify-center p-5 bg-slate-50 dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 hover:border-blue-200 transition-colors cursor-pointer group text-center shadow-sm">
+                      <label className="flex flex-col items-center justify-center p-5 bg-slate-50 dark:bg-slate-800 rounded-[2rem] border border-slate-100 dark:border-slate-700 hover:border-blue-200 cursor-pointer group text-center shadow-sm">
                         <span className="text-3xl mb-2 group-hover:-translate-y-1 transition-transform">📁</span>
                         <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 tracking-widest uppercase">استعادة بيانات</span>
                         <input type="file" accept=".json" onChange={(e) => { importData(e); setShowDashboard(false); }} className="hidden" />
@@ -879,17 +818,6 @@ export default function App() {
                                <button className="px-4 py-1.5 rounded-full text-xs font-bold text-slate-500 opacity-50 cursor-not-allowed transition-all" title="قريباً">EN</button>
                             </div>
                         </div>
-
-                        <button 
-                          onClick={() => {
-                            generatePDF();
-                            setShowDashboard(false);
-                          }} 
-                          className="w-full flex flex-row-reverse items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-[2rem] border border-slate-100 dark:border-slate-800 hover:border-blue-200 transition-all group"
-                        >
-                          <span className="text-sm font-black text-slate-600 dark:text-slate-300">مستند التقرير PDF</span>
-                          <span className="text-2xl group-hover:scale-110 transition-transform">📄</span>
-                        </button>
 
                         <button 
                           onClick={() => handleInstallPWA()}
@@ -1096,7 +1024,7 @@ export default function App() {
               >
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-blue-500/10 dark:bg-blue-500/5 rounded-full blur-[100px] pointer-events-none" />
                 
-                {userProfile && (
+                 {userProfile && (
                   <motion.div 
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1104,8 +1032,7 @@ export default function App() {
                   >
                     <div className="flex flex-col items-center gap-2">
                        <span className="bg-blue-500/10 text-blue-600 dark:text-blue-400 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border border-blue-500/20">Aura Verified ✅</span>
-                       <h2 className="text-3xl font-black text-slate-800 dark:text-white mt-2">أهلاً بك مرة أخرى، {userProfile.name}</h2>
-                       <p className="text-xs font-bold text-slate-400 dark:text-slate-500 mt-1 max-w-[200px] leading-relaxed mx-auto italic opacity-70 group-hover:opacity-100 transition-opacity">"نحن لا نبني عادات، نحن نبني شخصيات أعمق وأقوى."</p>
+                       <h2 className="text-xl font-black text-slate-800 dark:text-white mt-2 px-6">{welcomeMessage}</h2>
                     </div>
                   </motion.div>
                 )}
@@ -1116,7 +1043,7 @@ export default function App() {
                   <div className={`absolute inset-16 border rounded-full transition-all duration-1000 ${glowActivated ? 'border-blue-300 dark:border-blue-600 scale-105' : 'border-slate-200 dark:border-slate-800'}`} />
                   <div className={`absolute inset-24 border rounded-full animate-[ping_12s_cubic-bezier(0,0,0.2,1)_infinite] transition-all duration-1000 ${glowActivated ? 'border-blue-400 shadow-[0_0_40px_rgba(59,130,246,0.4)]' : 'border-blue-100/50 dark:border-slate-800/40'}`} />
                   
-                  <motion.button 
+                   <motion.button 
                     onClick={() => setGlowActivated(!glowActivated)}
                     animate={{ 
                       scale: glowActivated ? [1, 1.1, 1] : [1, 1.05, 1], 
@@ -1130,6 +1057,11 @@ export default function App() {
                      <Target className="w-12 h-12 text-white mb-1" />
                      <span className="text-[10px] font-black text-white uppercase tracking-[0.3em]">AURA</span>
                   </motion.button>
+                  <div className="absolute top-[calc(50%+68px)] left-1/2 -translate-x-1/2 flex flex-col items-center gap-4">
+                    <button onClick={() => setShowPlanAnalyzer(true)} className="px-6 py-2 bg-blue-600 text-white font-black text-[10px] rounded-full uppercase tracking-widest shadow-lg hover:bg-blue-700 transition">
+                      افحص خطتي 🔍
+                    </button>
+                  </div>
 
                   <button onClick={() => setActiveTab('habits')} style={{ top: '0%', left: '50%', transform: 'translate(-50%, -50%)' }} className={`absolute w-20 h-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-full shadow-[0_10px_40px_-10px_rgba(37,99,235,0.2)] border border-white dark:border-slate-800 flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-95 transition-all text-blue-600 z-30 group/btn ${glowActivated ? 'shadow-[0_0_30px_rgba(37,99,235,0.4)] border-blue-200' : ''}`}>
                      <CheckCircle2 className="w-7 h-7 group-hover/btn:scale-110 transition-transform" />
@@ -1178,6 +1110,9 @@ export default function App() {
                     userTitle={userTitle} 
                     focusSessions={focusSessions || []} 
                     dreamSessions={dreamSessions} 
+                    onDeleteFocusSession={(id) => setFocusSessions(prev => (prev || []).filter(s => s.id !== id))}
+                    onDeleteDreamSession={(id) => setDreamSessions(prev => (prev || []).filter(s => s.id !== id))}
+                    requestConfirm={handleRequestConfirm}
                   />
                 </Suspense>
               </motion.div>
@@ -1544,21 +1479,7 @@ export default function App() {
                   onBack={() => setActiveTab('home')} 
                   tasks={scheduleTasks} 
                   setTasks={setScheduleTasks} 
-                  requestConfirm={(title, description, icon, onConfirm) => {
-                    if (!title) {
-                      setConfirmAction(null);
-                      return;
-                    }
-                    setConfirmAction({ 
-                      title, 
-                      description, 
-                      icon, 
-                      onConfirm: () => {
-                        onConfirm();
-                        setConfirmAction(null);
-                      }
-                    });
-                  }}
+                  requestConfirm={handleRequestConfirm}
                   onCelebrate={handleCelebrate}
                   onTaskComplete={p => setPoints(prev => prev + p)}
                 />
@@ -1577,21 +1498,7 @@ export default function App() {
                   onBack={() => setActiveTab('home')} 
                   plannerData={plannerData} 
                   setPlannerData={setPlannerData} 
-                  requestConfirm={(title, description, icon, onConfirm) => {
-                    if (!title) {
-                      setConfirmAction(null);
-                      return;
-                    }
-                    setConfirmAction({ 
-                      title, 
-                      description, 
-                      icon, 
-                      onConfirm: () => {
-                        onConfirm();
-                        setConfirmAction(null);
-                      }
-                    });
-                  }}
+                  requestConfirm={handleRequestConfirm}
                 />
               </Suspense>
             </motion.div>
@@ -1613,21 +1520,7 @@ export default function App() {
                   dreamSessions={dreamSessions || []}
                   setFocusSessions={setFocusSessions}
                   setDreamSessions={setDreamSessions}
-                  requestConfirm={(title, description, icon, onConfirm) => {
-                    if (!title) {
-                      setConfirmAction(null);
-                      return;
-                    }
-                    setConfirmAction({ 
-                      title, 
-                      description, 
-                      icon, 
-                      onConfirm: () => {
-                        onConfirm();
-                        setConfirmAction(null);
-                      }
-                    });
-                  }}
+                  requestConfirm={handleRequestConfirm}
                   onBack={() => setActiveTab('home')}
                 />
               </Suspense>
@@ -1653,6 +1546,7 @@ export default function App() {
                   setGlobalRecoveryMode={setGlobalRecoveryMode}
                   userName={userProfile?.name?.split(' ')[0]}
                   showFeedback={showFeedback}
+                  requestConfirm={handleRequestConfirm}
                 />
               </Suspense>
             </motion.div>
@@ -1755,6 +1649,7 @@ export default function App() {
                     }}
                     onEdit={handleEdit}
                     onDelete={() => handleDelete(habit.id)}
+                    onReset={() => handleResetHabit(habit.id)}
                     onToggleRecovery={toggleHabitRecovery}
                     onRelapse={handleRelapse}
                     onIconClick={(icon, name) => setZoomIcon({ icon, name })}
@@ -1820,6 +1715,8 @@ export default function App() {
                   <h3 className="text-2xl font-black text-slate-900 dark:text-slate-100 mb-2">{confirmAction.title}</h3>
                   <p className="text-sm font-bold text-slate-400 dark:text-slate-500 mb-8 leading-relaxed">{confirmAction.description}</p>
                   
+                  {confirmAction.extraContent}
+                  
                   <div className="grid grid-cols-2 gap-4">
                      <button 
                        onClick={() => setConfirmAction(null)} 
@@ -1855,9 +1752,7 @@ export default function App() {
                {(feedback as any).showUndo && (
                  <button 
                   onClick={() => {
-                    revertLastCompletion();
                     setFeedback(null);
-                    showFeedback('تم التراجع عن الإنجاز.', 'info');
                   }}
                   className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg flex items-center gap-1.5 transition-all text-[10px] border border-white/30"
                  >
@@ -1944,6 +1839,21 @@ export default function App() {
         )}
         {showTips && (
           <EngineeringTips onClose={() => setShowTips(false)} />
+        )}
+        {showPlanAnalyzer && (
+           <PlanAnalyzerPopup 
+             onClose={() => setShowPlanAnalyzer(false)} 
+             planData={JSON.stringify({ 
+              habits, 
+              focusSessions, 
+              dreamSessions, 
+              generalNotes, 
+              plannerData, 
+              points 
+            })} 
+            reports={reports}
+            setReports={setReports}
+           />
         )}
       </AnimatePresence>
     </div>

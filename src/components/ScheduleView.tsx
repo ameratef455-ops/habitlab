@@ -13,7 +13,9 @@ import {
   Activity,
   Trash2,
   Edit3,
-  RotateCcw
+  RotateCcw,
+  ArrowRight,
+  MoreVertical
 } from 'lucide-react';
 import {
   DndContext, 
@@ -58,10 +60,9 @@ interface SortableItemProps {
   onUndo: (task: ScheduleTask) => void;
   onDelete: (id: string) => void;
   onEdit: (task: ScheduleTask) => void;
-  key?: string | number;
 }
 
-const SortableTask = ({ task, onComplete, onUndo, onDelete, onEdit }: SortableItemProps) => {
+const SortableTask: React.FC<SortableItemProps> = ({ task, onComplete, onUndo, onDelete, onEdit }) => {
   const {
     attributes,
     listeners,
@@ -70,6 +71,8 @@ const SortableTask = ({ task, onComplete, onUndo, onDelete, onEdit }: SortableIt
     transition,
     isDragging
   } = useSortable({ id: task.id });
+
+  const [showOptions, setShowOptions] = useState(false);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -88,22 +91,51 @@ const SortableTask = ({ task, onComplete, onUndo, onDelete, onEdit }: SortableIt
           : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 shadow-2xl shadow-slate-200/20 dark:shadow-none'
       } text-right`}
     >
-      {!task.completed && (
-        <div className="absolute top-4 left-4 flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
+        <div className="absolute top-6 left-6 z-10">
           <button 
-            onClick={() => onEdit(task)} 
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-blue-500 hover:bg-blue-500 hover:text-white bg-blue-50 transition-all shadow-sm"
+            onClick={() => setShowOptions(!showOptions)} 
+            className="w-12 h-12 rounded-full flex items-center justify-center bg-white/90 dark:bg-slate-800/90 text-slate-400 hover:text-blue-500 transition-all border border-slate-100 dark:border-slate-700 shadow-xl"
+            title="خيارات"
           >
-            <Edit3 className="w-5 h-5" />
+            <MoreVertical className="w-5 h-5" />
           </button>
-          <button 
-            onClick={() => onDelete(task.id)} 
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-blue-600 hover:bg-blue-600 hover:text-white bg-blue-50 transition-all shadow-sm"
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
+          
+          <AnimatePresence>
+            {showOptions && (
+              <>
+                <motion.div 
+                  initial={{ opacity: 0 }} 
+                  animate={{ opacity: 1 }} 
+                  exit={{ opacity: 0 }} 
+                  className="fixed inset-0 z-40 bg-transparent" 
+                  onClick={() => setShowOptions(false)} 
+                />
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, x: 10 }}
+                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  className="absolute top-14 left-0 z-50 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-2xl p-2 min-w-[140px]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button 
+                    onClick={() => { onEdit(task); setShowOptions(false); }} 
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 transition-all text-xs font-black"
+                  >
+                    <span>تعديل</span>
+                    <Edit3 className="w-4 h-4 ml-2" />
+                  </button>
+                  <button 
+                    onClick={() => { onDelete(task.id); setShowOptions(false); }} 
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all text-xs font-black"
+                  >
+                    <span>حذف</span>
+                    <Trash2 className="w-4 h-4 ml-2" />
+                  </button>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
-      )}
 
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
@@ -121,11 +153,16 @@ const SortableTask = ({ task, onComplete, onUndo, onDelete, onEdit }: SortableIt
                 <span className="text-xs font-bold text-slate-500 flex items-center gap-1"><Target className="w-3 h-3" /> {task.duration}</span>
               </div>
            </div>
-           <div className="flex flex-col gap-2">
+           <div className="flex flex-col gap-2 relative">
              {task.completed ? (
-               <button onClick={() => onUndo(task)} className="w-14 h-14 rounded-full flex items-center justify-center text-amber-500 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 transition-all hover:scale-110 active:scale-95 shadow-md">
-                 <RotateCcw className="w-7 h-7" />
-               </button>
+               <div className="flex items-center gap-2">
+                 <button onClick={() => onUndo(task)} className="w-10 h-10 rounded-full flex items-center justify-center text-amber-500 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 transition-all hover:scale-110 active:scale-95 shadow-sm opacity-40 hover:opacity-100 z-10">
+                   <RotateCcw className="w-4 h-4" />
+                 </button>
+                 <div className="w-14 h-14 rounded-full flex items-center justify-center text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 border-2 border-emerald-500 shadow-md">
+                   <CheckCircle2 className="w-8 h-8" />
+                 </div>
+               </div>
              ) : (
                <button onClick={() => onComplete(task)} className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-500 shadow-md group/check text-slate-300 hover:text-emerald-500 bg-slate-50 dark:bg-slate-800">
                  <div className="w-8 h-8 rounded-full border-2 border-slate-200 dark:border-slate-700 group-hover/check:border-emerald-500 transition-colors duration-500" />
@@ -169,21 +206,21 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack, tasks, setTa
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [completionForm, setCompletionForm] = useState({ durationMet: true, goalMet: 'expected' as 'min'|'expected'|'none', notes: '' });
 
-  const [isQuickLog, setIsQuickLog] = useState(false);
-
   const weekDates = useMemo(() => {
     const today = new Date();
     const dates = [];
     for (let i = 0; i < 7; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
-      const name = DAYS[d.getDay() === 6 ? 0 : d.getDay() + 1]; // Simplified Arabic day logic
-      dates.push({
-        id: i,
-        name: new Intl.DateTimeFormat('ar-EG', { weekday: 'long' }).format(d).split(' ')[0],
-        label: d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' }),
-        iso: d.toISOString().split('T')[0]
-      });
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
+        // Correctly handle day names in Arabic for the picker
+        const dayIdx = d.getDay();
+        const arabicDay = DAYS[(dayIdx + 1) % 7]; // Offset to match user's DAYS array if needed
+        dates.push({
+            id: i,
+            name: new Intl.DateTimeFormat('ar-EG', { weekday: 'long' }).format(d).split(' ')[0],
+            label: d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' }),
+            iso: d.toISOString().split('T')[0]
+        });
     }
     return dates;
   }, []);
@@ -281,19 +318,26 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack, tasks, setTa
 
     dayTasks.forEach(task => {
       if (task.completed) {
-        // Efficiency calculation (Kafaa)
-        let taskEfficiency = taskWeight;
-        if (!task.completionData?.durationMet) {
-          taskEfficiency = taskWeight * 0.85; // Deduct 15%
-        }
-        totalEfficiency += taskEfficiency;
+        const onTime = task.completionData?.durationMet;
+        const expected = task.completionData?.goalMet === 'expected';
 
-        // Focus calculation (Tarkiz)
-        let taskFocus = taskWeight;
-        if (task.completionData?.goalMet !== 'expected') {
-          taskFocus = taskWeight * 0.85; // Deduct 15%
+        let eScore = 1.0;
+        let fScore = 1.0;
+
+        if (expected && !onTime) {
+            // expected + not on time => Focus decreases 15%
+            fScore = 0.85;
+        } else if (!expected && onTime) {
+            // not on expected + on time => Efficiency decreases 15%
+            eScore = 0.85;
+        } else if (!expected && !onTime) {
+            // Both not met => Both 30% decrease
+            eScore = 0.70;
+            fScore = 0.70;
         }
-        totalFocus += taskFocus;
+
+        totalEfficiency += taskWeight * eScore;
+        totalFocus += taskWeight * fScore;
       }
     });
     
@@ -307,7 +351,10 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack, tasks, setTa
     <div className="relative pt-6 min-h-[70vh] pb-32">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
-          <div className="text-right">
+           <button onClick={onBack} className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-blue-500 transition-colors">
+             <ArrowRight className="w-5 h-5" />
+           </button>
+           <div className="text-right">
             <h2 className="text-2xl font-black text-slate-800 dark:text-white leading-none">الجدول الأسبوعي</h2>
             <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-1">Weekly Protocol</p>
           </div>
@@ -358,23 +405,23 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack, tasks, setTa
       </div>
 
       <div className="space-y-4">
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={activeTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-        {activeTasks.map(task => (
-          <SortableTask 
-            key={task.id} 
-            task={task} 
-            onComplete={(t) => {
-               setCompletingTask(t);
-               setCompletionForm({ durationMet: true, goalMet: 'expected', notes: '' });
-            }} 
-            onUndo={undoTask}
-            onDelete={deleteTask} 
-            onEdit={handleEditTask} 
-          />
-        ))}
-      </SortableContext>
-    </DndContext>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={activeTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+            {activeTasks.map(task => (
+              <SortableTask 
+                key={task.id} 
+                task={task} 
+                onComplete={(t) => {
+                   setCompletingTask(t);
+                   setCompletionForm({ durationMet: true, goalMet: 'expected', notes: '' });
+                }} 
+                onUndo={undoTask}
+                onDelete={deleteTask} 
+                onEdit={handleEditTask} 
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       </div>
 
       <AnimatePresence>
@@ -426,8 +473,17 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack, tasks, setTa
                        ))}
                      </div>
                    </div>
-                   <div className="pt-6 border-t border-slate-100">
-                     <button onClick={finishTask} className="w-full py-5 bg-emerald-500 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl">تأكيد الإنجاز 🚀</button>
+                   <div className="pt-6 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
+                      <button onClick={() => setCompletingTask(null)} className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-slate-200 transition-colors shadow-sm self-center" title="رجع">
+                        <ArrowRight className="w-4 h-4 rotate-180" />
+                      </button>
+                      <button 
+                        onClick={finishTask} 
+                        className="flex-1 py-4 bg-blue-600 text-white rounded-[2rem] font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-blue-700 transition-all active:scale-95"
+                      >
+                        <CheckCircle2 className="w-6 h-6" />
+                        تأكيد وإنجاز
+                      </button>
                    </div>
                 </div>
              </motion.div>
@@ -437,4 +493,3 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack, tasks, setTa
     </div>
   );
 };
-

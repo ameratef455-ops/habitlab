@@ -39,6 +39,11 @@ export function useHabitLab() {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [reports, setReports] = useState<any[]>(() => {
+    const saved = localStorage.getItem('reports');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [weeklyChallenge, setWeeklyChallenge] = useState<WeeklyChallenge | null>(() => {
     const saved = localStorage.getItem('weeklyChallenge');
     return saved ? JSON.parse(saved) : null;
@@ -75,6 +80,7 @@ export function useHabitLab() {
     localStorage.setItem('generalNotes', JSON.stringify(generalNotes));
     localStorage.setItem('focusSessions', JSON.stringify(focusSessions));
     localStorage.setItem('dreamSessions', JSON.stringify(dreamSessions));
+    localStorage.setItem('reports', JSON.stringify(reports));
     localStorage.setItem('globalRecoveryMode', String(globalRecoveryMode));
     localStorage.setItem('todayIsHoliday', String(todayIsHoliday));
     if (weeklyChallenge) {
@@ -330,6 +336,7 @@ export function useHabitLab() {
     if (remoteData.generalNotes) setGeneralNotes(remoteData.generalNotes);
     if (remoteData.focusSessions) setFocusSessions(remoteData.focusSessions);
     if (remoteData.dreamSessions) setDreamSessions(remoteData.dreamSessions);
+    if (remoteData.reports) setReports(remoteData.reports);
     if (remoteData.globalRecoveryMode !== undefined) setGlobalRecoveryMode(remoteData.globalRecoveryMode);
     if (remoteData.todayIsHoliday !== undefined) setTodayIsHoliday(remoteData.todayIsHoliday);
   };
@@ -357,6 +364,8 @@ export function useHabitLab() {
     setFocusSessions,
     dreamSessions,
     setDreamSessions,
+    reports,
+    setReports,
     globalRecoveryMode,
     setGlobalRecoveryMode,
     setWeeklyChallenge,

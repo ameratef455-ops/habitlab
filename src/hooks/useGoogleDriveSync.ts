@@ -10,6 +10,7 @@ export interface AppData {
   generalNotes?: any[];
   focusSessions?: any[];
   dreamSessions?: any[];
+  reports?: any[];
   globalRecoveryMode?: boolean;
   todayIsHoliday?: boolean;
   timestamp: number;

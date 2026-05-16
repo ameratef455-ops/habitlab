@@ -1,6 +1,6 @@
-import React, { useState, memo } from 'react';
+import React, { useState, memo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, Flame, MessageSquare, Mic, AlertCircle, TrendingUp, Calendar, Clock, Goal, ListOrdered, Plus, MoreVertical, Edit3, Trash2, Sparkles, Target, Zap, CheckCircle2, Flag } from 'lucide-react';
+import { Check, Flame, MessageSquare, AlertCircle, TrendingUp, Calendar, Clock, Goal, ListOrdered, Plus, MoreVertical, Edit3, Trash2, Sparkles, Target, Zap, CheckCircle2, Flag, RotateCcw, ArrowRight, Mic, Square } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Habit } from '../types';
 
@@ -11,6 +11,7 @@ interface HabitCardProps {
   onUndo: () => void;
   onEdit: (habit: Habit) => void;
   onDelete: (id: string) => void;
+  onReset: (id: string) => void;
   onToggleRecovery: (id: string) => void;
   onRelapse: (id: string, reason: string) => void;
   isGlobalRecovery?: boolean;
@@ -18,7 +19,7 @@ interface HabitCardProps {
   onCancelAlert?: () => void;
 }
 
-export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedToday, onUndo, onEdit, onDelete, onToggleRecovery, onRelapse, isGlobalRecovery, onIconClick, onCancelAlert }) => {
+export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedToday, onUndo, onEdit, onDelete, onReset, onToggleRecovery, onRelapse, isGlobalRecovery, onIconClick, onCancelAlert }) => {
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [showRelapseInput, setShowRelapseInput] = useState(false);
   const [relapseReason, setRelapseReason] = useState('');
@@ -41,6 +42,40 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
 
   const [showDetails, setShowDetails] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = mediaRecorderRef.current || new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        setNote(prev => prev + (prev ? '\n' : '') + `[رابط الملاحظة الصوتية: ${audioUrl}]`);
+      };
+      
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+    } catch (e) {
+      console.error('Mic Access Error:', e);
+      alert('تعذر الوصول للميكروفون.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+    }
+  };
 
   const handleQuickComplete = () => {
     // True one-tap completion: assume expected level, no notes, no questions
@@ -64,16 +99,9 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
     setNoteTitle('');
     setNoteSubtitle('');
     setStep(0);
-    setIsRecording(false);
   };
 
-  const startRecording = () => {
-    setIsRecording(true);
-    setTimeout(() => {
-      setIsRecording(false);
-      setNote('تسجيل صوتي تم حفظه بنجاح 🎙️');
-    }, 3000);
-  };
+  // Removed startRecording here
 
   const progress = React.useMemo(() => {
     if (!habit.awayGoal || !habit.awayGoal.targetDate) return 0;
@@ -172,36 +200,41 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
               <span className="flex items-center gap-1 text-orange-500"><Flame className="w-3.5 h-3.5 text-orange-400" /> {habit.streak} يوم</span>
             </div>
 
-            <button 
-              onClick={() => setShowManageMenu(!showManageMenu)}
-              className="absolute top-2 right-2 w-10 h-10 rounded-full bg-slate-100/80 dark:bg-slate-700/80 text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-all flex items-center justify-center backdrop-blur-sm shadow-sm z-40"
-            >
-              <MoreVertical className="w-5 h-5" />
-            </button>
+           <div className="absolute top-2 left-2 z-40 transition-opacity">
+             <button 
+               onClick={() => setShowManageMenu(!showManageMenu)}
+               className="w-10 h-10 rounded-full bg-slate-100/90 dark:bg-slate-700/80 text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-all flex items-center justify-center backdrop-blur-md shadow-sm border border-white/20"
+             >
+               <MoreVertical className={`w-5 h-5 transition-transform ${showManageMenu ? 'rotate-90' : ''}`} />
+             </button>
 
-            <AnimatePresence>
-              {showManageMenu && (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
-                  className="absolute top-14 right-2 w-40 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl border border-slate-100 dark:border-slate-700 shadow-2xl rounded-3xl overflow-hidden z-50 text-right"
-                >
-                  <button onClick={() => { onEdit(habit); setShowManageMenu(false); }} className="w-full px-5 py-3.5 text-xs font-bold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 flex items-center justify-between transition-colors">
-                    تعديل <Edit3 className="w-4 h-4 ml-2 opacity-50" />
-                  </button>
-                  {habit.enableReminders && onCancelAlert && (
-                    <button onClick={() => { onCancelAlert(); setShowManageMenu(false); }} className="w-full px-5 py-3.5 text-xs font-bold text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center justify-between border-t border-slate-100 dark:border-slate-700 transition-colors">
-                      حذف التنبيه <LucideIcons.BellOff className="w-4 h-4 ml-2 opacity-50" />
-                    </button>
-                  )}
-                  <button onClick={() => { onDelete(habit.id); setShowManageMenu(false); }} className="w-full px-5 py-3.5 text-xs font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center justify-between border-t border-slate-100 dark:border-slate-700 transition-colors">
-                    حذف <Trash2 className="w-4 h-4 ml-2 opacity-50" />
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+             <AnimatePresence>
+               {showManageMenu && (
+                 <motion.div 
+                   initial={{ opacity: 0, x: -10, y: 10, scale: 0.95 }}
+                   animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+                   exit={{ opacity: 0, x: -10, y: 10, scale: 0.95 }}
+                   transition={{ duration: 0.2, ease: "easeOut" }}
+                   className="absolute top-12 left-0 w-48 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-2xl rounded-3xl overflow-hidden z-50 text-right ring-1 ring-slate-900/5 shadow-xl"
+                 >
+                   <button onClick={() => { onEdit(habit); setShowManageMenu(false); }} className="w-full px-5 py-3.5 text-[11px] font-black text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between transition-colors">
+                     تعديل المهارة <Edit3 className="w-4 h-4 ml-2 opacity-60" />
+                   </button>
+                   {habit.enableReminders && onCancelAlert && (
+                     <button onClick={() => { onCancelAlert(); setShowManageMenu(false); }} className="w-full px-5 py-3.5 text-[11px] font-black text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center justify-between border-t border-slate-50 dark:border-slate-800 transition-colors">
+                       إلغاء التنبيه <LucideIcons.BellOff className="w-4 h-4 ml-2 opacity-60" />
+                     </button>
+                   )}
+                   <button onClick={() => { onReset(habit.id); setShowManageMenu(false); }} className="w-full px-5 py-3.5 text-[11px] font-black text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 flex items-center justify-between border-t border-slate-50 dark:border-slate-800 transition-colors">
+                     ابدأ من جديد (Reset) <RotateCcw className="w-4 h-4 ml-2 opacity-60" />
+                   </button>
+                   <button onClick={() => { onDelete(habit.id); setShowManageMenu(false); }} className="w-full px-5 py-3.5 text-[11px] font-black text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-between border-t border-slate-50 dark:border-slate-800 transition-colors">
+                     حذف نهائي <Trash2 className="w-4 h-4 ml-2 opacity-60" />
+                   </button>
+                 </motion.div>
+               )}
+             </AnimatePresence>
+           </div>
 
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3">
                <button 
@@ -241,10 +274,14 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
               className="absolute inset-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl z-20 flex flex-col justify-center items-center p-6 rounded-full"
             >
               <h5 className="text-[10px] font-black text-slate-600 dark:text-slate-300 mb-6 uppercase tracking-[0.2em] bg-slate-100 dark:bg-slate-700 px-4 py-2 rounded-full shadow-sm">Initialize Interaction</h5>
-              <div className="grid grid-cols-2 gap-3 w-full max-w-[210px]">
-                <button onClick={() => { setShowActionMenu(false); handleDetailedStep(); }} className="aspect-square bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group">
+              <div className="grid grid-cols-2 gap-3 w-full max-w-[240px]">
+                <button onClick={() => { setShowActionMenu(false); handleQuickComplete(); }} className="aspect-square bg-blue-600 text-white rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-xl shadow-blue-500/30 group">
+                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">⚡</div>
+                  تسجيل سريع
+                </button>
+                <button onClick={() => { setShowActionMenu(false); handleDetailedStep(); }} className="aspect-square bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group border border-blue-100 dark:border-blue-800">
                   <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">📝</div>
-                  تسجيل إنجاز
+                  تسجيل مفصل
                 </button>
                 <button onClick={() => { setShowActionMenu(false); onToggleRecovery(habit.id); }} className="aspect-square bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group">
                   <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">🛡️</div>
@@ -253,10 +290,6 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
                 <button onClick={() => { setShowActionMenu(false); setShowRelapseInput(true); }} className="aspect-square bg-orange-50 dark:bg-orange-900/20 text-orange-500 dark:text-orange-400 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group">
                   <div className="w-8 h-8 rounded-full bg-orange-500/10 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">🍂</div>
                   وقعـت؟
-                </button>
-                <button onClick={() => { onEdit(habit); setShowActionMenu(false); }} className="aspect-square bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group">
-                  <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">⚙️</div>
-                  تعديل
                 </button>
               </div>
               <button 
@@ -478,8 +511,11 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
                     </div>
 
                     <div className="flex gap-3 pt-2">
-                      <button onClick={startRecording} className="w-14 h-14 rounded-[1.5rem] bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center hover:bg-indigo-100 transition-colors shadow-sm border border-indigo-100 dark:border-indigo-800">
-                        {isRecording ? <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse" /> : <Mic className="w-6 h-6" />}
+                      <button 
+                        onClick={isRecording ? stopRecording : startRecording} 
+                        className={`w-14 h-14 rounded-[1.5rem] flex items-center justify-center transition-all shadow-sm border ${isRecording ? 'bg-rose-500 text-white animate-pulse border-rose-400' : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 border-indigo-100 dark:border-indigo-800'}`}
+                      >
+                        {isRecording ? <Square className="w-5 h-5" /> : <Mic className="w-6 h-6" />}
                       </button>
                       <button onClick={() => setStep(1)} className="flex-1 rounded-[1.5rem] bg-blue-600 text-white font-black text-xs uppercase hover:bg-blue-700 transition-colors shadow-xl shadow-blue-500/30 hover:-translate-y-0.5">
                         التالي
@@ -497,10 +533,13 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
                       </div>
                     </div>
                     <div className="flex gap-3">
-                       <button onClick={() => setStep(0)} className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center text-[10px] font-black hover:bg-slate-200 transition-colors">رجوع</button>
-                       <button onClick={() => handleComplete('text')} className="flex-1 py-4 rounded-full bg-emerald-500 text-white font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/30">
-                         تأكيد الإنجاز
-                       </button>
+                     <button onClick={() => setStep(0)} className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition-colors shadow-sm self-center" title="رجع">
+                        <ArrowRight className="w-4 h-4 rotate-180 opacity-40 hover:opacity-100 transition-opacity" />
+                     </button>
+                     <button onClick={() => handleComplete('text')} className="flex-1 py-5 bg-[#3270bf] text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-blue-500/25 flex items-center justify-center gap-2">
+                        <CheckCircle2 className="w-5 h-5" />
+                        تأكيد الإنجاز
+                     </button>
                     </div>
                   </div>
                 )}

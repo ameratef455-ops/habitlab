@@ -25,6 +25,7 @@ export interface Habit {
   streak: number;
   createdAt: string;
   completedDates: string[];
+  totalCompletions?: number;
   color?: string;
   tag?: string;
   celebrationIcon?: string;
@@ -166,4 +167,11 @@ export interface FocusSession {
   points: number;
   feedback?: string; 
   date: string;
+}
+
+export interface Report {
+  id: string;
+  date: string;
+  planData: string;
+  result: any;
 }

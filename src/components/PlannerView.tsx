@@ -175,7 +175,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({ onBack, plannerData, s
                       {/* Close/Delete corner button */}
                       <button 
                         onClick={() => handleDelete(month)} 
-                        className="absolute -top-20 -right-4 w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/10 text-blue-500 flex items-center justify-center hover:bg-blue-500 hover:text-white transition-all border border-blue-100 dark:border-blue-900/30 z-10 shadow-sm"
+                        className="absolute -top-20 -right-4 w-10 h-10 rounded-full bg-[#3270bf] text-white flex items-center justify-center hover:scale-110 transition-all border border-blue-100 dark:border-blue-900/30 z-10 shadow-sm"
                         title="حذف البيانات"
                       >
                         <Trash2 className="w-4 h-4" />
