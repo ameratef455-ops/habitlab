@@ -12,7 +12,8 @@ import {
   TrendingUp, 
   Activity,
   Trash2,
-  Edit3
+  Edit3,
+  RotateCcw
 } from 'lucide-react';
 import {
   DndContext, 
@@ -54,12 +55,13 @@ interface ScheduleTask {
 interface SortableItemProps {
   task: ScheduleTask;
   onComplete: (task: ScheduleTask) => void;
+  onUndo: (task: ScheduleTask) => void;
   onDelete: (id: string) => void;
   onEdit: (task: ScheduleTask) => void;
   key?: string | number;
 }
 
-const SortableTask = ({ task, onComplete, onDelete, onEdit }: SortableItemProps) => {
+const SortableTask = ({ task, onComplete, onUndo, onDelete, onEdit }: SortableItemProps) => {
   const {
     attributes,
     listeners,
@@ -87,18 +89,18 @@ const SortableTask = ({ task, onComplete, onDelete, onEdit }: SortableItemProps)
       } text-right`}
     >
       {!task.completed && (
-        <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <div className="absolute top-4 left-4 flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
           <button 
             onClick={() => onEdit(task)} 
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-blue-500 hover:bg-blue-500 hover:text-white bg-blue-50 transition-all shadow-sm"
           >
-            <Edit3 className="w-4 h-4" />
+            <Edit3 className="w-5 h-5" />
           </button>
           <button 
             onClick={() => onDelete(task.id)} 
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-blue-600 hover:bg-blue-600 hover:text-white bg-blue-50 transition-all shadow-sm"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-5 h-5" />
           </button>
         </div>
       )}
@@ -119,9 +121,17 @@ const SortableTask = ({ task, onComplete, onDelete, onEdit }: SortableItemProps)
                 <span className="text-xs font-bold text-slate-500 flex items-center gap-1"><Target className="w-3 h-3" /> {task.duration}</span>
               </div>
            </div>
-          <button onClick={() => !task.completed && onComplete(task)} className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-500 shadow-md group/check ${task.completed ? 'text-emerald-500 bg-emerald-100 dark:bg-emerald-900/50' : 'text-slate-300 hover:text-emerald-500 bg-slate-50 dark:bg-slate-800'}`}>
-            {task.completed ? <CheckCircle2 className="w-8 h-8" /> : <div className="w-8 h-8 rounded-full border-2 border-slate-200 dark:border-slate-700 group-hover/check:border-emerald-500 transition-colors duration-500" />}
-          </button>
+           <div className="flex flex-col gap-2">
+             {task.completed ? (
+               <button onClick={() => onUndo(task)} className="w-14 h-14 rounded-full flex items-center justify-center text-amber-500 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 transition-all hover:scale-110 active:scale-95 shadow-md">
+                 <RotateCcw className="w-7 h-7" />
+               </button>
+             ) : (
+               <button onClick={() => onComplete(task)} className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-500 shadow-md group/check text-slate-300 hover:text-emerald-500 bg-slate-50 dark:bg-slate-800">
+                 <div className="w-8 h-8 rounded-full border-2 border-slate-200 dark:border-slate-700 group-hover/check:border-emerald-500 transition-colors duration-500" />
+               </button>
+             )}
+           </div>
         </div>
       </div>
 
@@ -147,9 +157,10 @@ interface ScheduleViewProps {
   setTasks: React.Dispatch<React.SetStateAction<ScheduleTask[]>>;
   requestConfirm: (title: string, description: string, icon: React.ReactNode, onConfirm: () => void) => void;
   onCelebrate?: () => void;
+  onTaskComplete?: (points: number) => void;
 }
 
-export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack, tasks, setTasks, requestConfirm, onCelebrate }) => {
+export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack, tasks, setTasks, requestConfirm, onCelebrate, onTaskComplete }) => {
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [completingTask, setCompletingTask] = useState<ScheduleTask | null>(null);
@@ -157,6 +168,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack, tasks, setTa
   const [newTask, setNewTask] = useState<Partial<ScheduleTask>>({});
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [completionForm, setCompletionForm] = useState({ durationMet: true, goalMet: 'expected' as 'min'|'expected'|'none', notes: '' });
+
+  const [isQuickLog, setIsQuickLog] = useState(false);
 
   const weekDates = useMemo(() => {
     const today = new Date();
@@ -222,15 +235,36 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack, tasks, setTa
   const finishTask = () => {
     if (!completingTask) return;
     setTasks(tasks.map(t => t.id === completingTask.id ? { ...t, completed: true, completionData: completionForm } as ScheduleTask : t));
+    
+    let basePoints = 10;
+    if (completionForm.goalMet === 'expected') basePoints += 10;
+    else if (completionForm.goalMet === 'min') basePoints += 5;
+    
+    if (completionForm.durationMet) basePoints += 10;
+    
+    onTaskComplete?.(basePoints);
+
     setCompletingTask(null);
     onCelebrate?.();
+  };
+
+  const undoTask = (task: ScheduleTask) => {
+    requestConfirm(
+      'تراجع عن الإنجاز؟',
+      'هل تريد فعلاً إلغاء حالة الإتمام لهذه المهمة؟ سيتم خصم النقاط المكتسبة.',
+      <RotateCcw className="w-12 h-12 text-amber-500 mb-6 mx-auto" />,
+      () => {
+        setTasks(tasks.map(t => t.id === task.id ? { ...t, completed: false, completionData: undefined } as ScheduleTask : t));
+        onTaskComplete?.(-20); // Average deduction
+      }
+    );
   };
 
   const deleteTask = (id: string) => {
     requestConfirm(
       'حذف هذه المهمة؟',
       'سيتم إزالة المهمة نهائياً من جدولك اليومي.',
-      <Trash2 className="w-12 h-12 text-red-500 mb-6 mx-auto" />,
+      <Trash2 className="w-12 h-12 text-blue-500 mb-6 mx-auto" />,
       () => {
         setTasks(prev => prev.filter(t => t.id !== id));
       }
@@ -327,7 +361,17 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ onBack, tasks, setTa
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={activeTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
         {activeTasks.map(task => (
-          <SortableTask key={task.id} task={task} onComplete={setCompletingTask} onDelete={deleteTask} onEdit={handleEditTask} />
+          <SortableTask 
+            key={task.id} 
+            task={task} 
+            onComplete={(t) => {
+               setCompletingTask(t);
+               setCompletionForm({ durationMet: true, goalMet: 'expected', notes: '' });
+            }} 
+            onUndo={undoTask}
+            onDelete={deleteTask} 
+            onEdit={handleEditTask} 
+          />
         ))}
       </SortableContext>
     </DndContext>

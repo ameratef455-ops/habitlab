@@ -232,30 +232,39 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
           { id: "achievements", label: "الإنجازات" },
           { id: "averages", label: "ملخص المهارات" },
           { id: "sessions", label: "جلسات العمل" },
-          { id: "relapses", label: "الوقعات ⚠️" },
+          { id: "relapses", label: "الوقعات (Relapses) 🍂" },
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() =>
               setActiveSubTab(tab.id as any)
             }
-            className={`flex-1 min-w-[80px] py-3 text-xs font-black rounded-xl transition-all relative ${
+            className={`flex-1 min-w-[80px] py-3 text-xs font-black rounded-xl transition-all relative z-10 ${
               activeSubTab === tab.id
-                ? "text-blue-600 shadow-md bg-white"
+                ? "text-blue-600"
                 : "text-slate-400 hover:text-slate-600"
             }`}
           >
+            {activeSubTab === tab.id && (
+              <motion.div
+                layoutId="activeSubTab"
+                className="absolute inset-0 bg-white rounded-xl shadow-md -z-10"
+                transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+              />
+            )}
             {tab.label}
           </button>
         ))}
       </div>
 
-      {activeSubTab === "relapses" && (
-        <motion.div
-           initial={{ opacity: 0, scale: 0.95 }}
-           animate={{ opacity: 1, scale: 1 }}
-           className="space-y-8 pt-6 text-right"
-        >
+      <motion.div
+        key={activeSubTab}
+        initial={{ opacity: 0, y: 10, filter: 'blur(8px)' }}
+        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+      >
+        {activeSubTab === "relapses" && (
+          <div className="space-y-8 pt-6 text-right">
           <div className="flex items-center justify-between mb-8 flex-row-reverse px-2">
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-black text-slate-800">سجل الوقعات (Relapses)</h2>
@@ -302,8 +311,8 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
               </div>
             )}
           </div>
-        </motion.div>
-      )}
+          </div>
+        )}
 
       {activeSubTab === "sessions" && (
         <motion.div
@@ -958,6 +967,7 @@ export const AnalysisView: React.FC<AnalysisViewProps> = ({
           ))}
         </div>
       )}
+      </motion.div>
     </div>
   );
 };

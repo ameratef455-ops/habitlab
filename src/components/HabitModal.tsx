@@ -222,6 +222,22 @@ export const HabitModal: React.FC<HabitModalProps> = ({ onClose, onSave, habitTo
                       </button>
                     ))}
                   </div>
+
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">اللون المخصص للمهارة</p>
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      {ICON_COLORS.map(color => (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, color })}
+                          className={`w-8 h-8 rounded-full transition-all ${color} ${
+                            formData.color === color ? 'ring-2 ring-offset-2 ring-blue-500 scale-110' : 'opacity-70 hover:opacity-100'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </motion.div>
               )}
 

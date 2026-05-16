@@ -51,7 +51,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({ onBack, plannerData, s
     requestConfirm(
       'حذف بيانات الشهر؟',
       `هل أنت متأكد من حذف جميع بيانات شهر ${month}؟ لا يمكن التراجع عن هذا الإجراء.`,
-      <Trash2 className="w-12 h-12 text-red-500 mb-6 mx-auto" />,
+      <Trash2 className="w-12 h-12 text-blue-500 mb-6 mx-auto" />,
       () => {
         setPlannerData(prev => {
           const newData = { ...prev };
@@ -175,7 +175,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({ onBack, plannerData, s
                       {/* Close/Delete corner button */}
                       <button 
                         onClick={() => handleDelete(month)} 
-                        className="absolute -top-20 -right-4 w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all border border-red-100 dark:border-red-900/30 z-10 shadow-sm"
+                        className="absolute -top-20 -right-4 w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/10 text-blue-500 flex items-center justify-center hover:bg-blue-500 hover:text-white transition-all border border-blue-100 dark:border-blue-900/30 z-10 shadow-sm"
                         title="حذف البيانات"
                       >
                         <Trash2 className="w-4 h-4" />

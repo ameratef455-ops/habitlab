@@ -77,6 +77,7 @@ export default function App() {
   const { 
     habits, 
     points,
+    setPoints,
     scheduleTasks,
     setScheduleTasks,
     plannerData,
@@ -92,7 +93,7 @@ export default function App() {
     deleteHabit,
     toggleHabitRecovery,
     completeHabit, 
-    revertLastCompletion,
+    undoHabitCompletion,
     todayIsHoliday,
     setTodayIsHoliday,
     overrideData,
@@ -471,8 +472,8 @@ export default function App() {
   }, []);
 
   const [activeTab, setActiveTab] = useState<'home' | 'habits' | 'analysis' | 'levels' | 'privacy' | 'notes' | 'planner' | 'schedule' | 'modes'>('home');
-  const [taskNotificationsEnabled, setTaskNotificationsEnabled] = useState(() => localStorage.getItem('task_notifications_enabled') !== 'false');
   const [showCelebration, setShowCelebration] = useState(false);
+  const [confettiIntensity, setConfettiIntensity] = useState<'low' | 'medium' | 'high'>('medium');
   const [selectedCategory, setSelectedCategory] = useState<string>('الكل');
   const [showModal, setShowModal] = useState(false);
   const [glowActivated, setGlowActivated] = useState(false);
@@ -489,10 +490,6 @@ export default function App() {
   const [feedback, setFeedback] = useState<{ msg: string; type: 'success' | 'info' | 'alert' } | null>(null);
 
   useEffect(() => {
-    localStorage.setItem('task_notifications_enabled', taskNotificationsEnabled.toString());
-  }, [taskNotificationsEnabled]);
-
-  useEffect(() => {
     if (window.location.hash === '#privacy') {
       setActiveTab('privacy');
     }
@@ -506,6 +503,10 @@ export default function App() {
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [activeTab]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab]);
 
   const filteredHabits = useMemo(() => {
@@ -647,8 +648,7 @@ export default function App() {
     }
   };
 
-  const handleComplete = async (habit: Habit, note?: string, type?: 'text' | 'voice', recovery?: boolean, questionnaire?: any) => {
-    // Sound effect (Ding / Pop)
+  const handleComplete = async (habit: Habit, note?: string, type?: 'text' | 'voice', recovery?: boolean, questionnaire?: any, isQuick: boolean = false) => {
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContext) {
@@ -668,22 +668,36 @@ export default function App() {
       }
     } catch(e) {}
 
-    // Run completion immediately without confirmation
     completeHabit(habit.id, note, type, recovery, questionnaire);
     trackHabitCompletion(habit.name, habit.streak + 1);
     
-    // UI feedback immediately
-    showFeedback('إنجاز عظيم! تم تسجيل النقطة. 🔥', 'success', true);
+    // Choose confetti intensity based on questionary/points
+    let intensity: 'low'|'medium'|'high' = 'medium';
+    if (isQuick) intensity = 'low';
+    if (questionnaire?.goalLevel === 'exceeded') intensity = 'high';
     
-    // Background the AI motivational message
+    setConfettiIntensity(intensity);
+    setShowCelebration(true);
+
+    showFeedback(isQuick ? 'تم تسجيل النقطة تلقائياً! ⚡' : 'إنجاز عظيم! تم تسجيل النقطة. 🔥', 'success', true);
+    
+    if (isQuick) return;
+
     getMotivationalMessage(habit, note).then(msg => {
-      setMotivation(msg);
+      // Append user name if available
+      const userName = userProfile?.name ? userProfile.name.split(' ')[0] : '';
+      setMotivation(userName ? `يا ${userName}، ${msg}` : msg);
       setTimeout(() => setMotivation(null), 5000);
     });
   };
 
-  const handleCelebrate = () => {
-    // Celebrate logic
+  const handleCelebrate = (intensity: 'low'|'medium'|'high' = 'medium') => {
+    setConfettiIntensity(intensity);
+    setShowCelebration(true);
+  };
+
+  const handleQuickComplete = (habit: Habit) => {
+    handleComplete(habit, undefined, undefined, false, undefined, true);
   };
 
   return (
@@ -692,7 +706,7 @@ export default function App() {
         {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
       </AnimatePresence>
 
-      <CelebrationConfetti active={showCelebration} onComplete={() => setShowCelebration(false)} />
+      <CelebrationConfetti active={showCelebration} intensity={confettiIntensity} onComplete={() => setShowCelebration(false)} />
       <AnimatePresence>
         {!isOnline && (
           <motion.div 
@@ -830,18 +844,7 @@ export default function App() {
                            <ArrowRight className="w-5 h-5 -rotate-180" />
                         </button>
 
-                        <div className="flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800/50 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 flex-row-reverse">
-                            <div className="flex flex-col text-right">
-                               <span className="text-sm font-black text-slate-800 dark:text-slate-200">إشعارات المهام 🔔</span>
-                               <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1 leading-relaxed">تثبيت إشعار دائم للمهام القادمة</span>
-                            </div>
-                            <button
-                              onClick={() => setTaskNotificationsEnabled(!taskNotificationsEnabled)}
-                              className={`w-14 h-8 flex items-center rounded-full p-1 transition-colors ${taskNotificationsEnabled ? 'bg-blue-500 shadow-lg shadow-blue-500/20' : 'bg-slate-200 dark:bg-slate-700'}`}
-                            >
-                               <div className={`w-6 h-6 bg-white rounded-full transition-transform shadow-sm ${taskNotificationsEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
-                            </button>
-                        </div>
+
                     </div>
                   </motion.div>
                 )}
@@ -1070,7 +1073,7 @@ export default function App() {
                    <Coffee className="w-12 h-12" />
                 </div>
                 <div className="space-y-4">
-                   <h2 className="text-3xl font-black text-slate-800">إنجازك النهاردة يكفي! 👋</h2>
+                   <h2 className="text-3xl font-black text-slate-800">إنجازك النهاردة يكفي يا {userProfile?.name?.split(' ')[0] || 'بطل'}! 👋</h2>
                    <p className="text-lg font-bold text-slate-500 leading-relaxed max-w-sm mx-auto">
                       أنت وصلت للمستوى المطلوب وأنهيت تحدي الأسبوع. النهاردة إجازة رسمية من Aura، استمتع بوقتك!
                    </p>
@@ -1097,10 +1100,13 @@ export default function App() {
                   <motion.div 
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="absolute top-0 w-full text-center mt-[-60px]"
+                    className="absolute top-0 w-full text-center mt-[-100px]"
                   >
-                    <p className="text-sm font-bold text-slate-500 dark:text-slate-400">أهلاً بك مرة أخرى،</p>
-                    <h2 className="text-3xl font-black text-slate-800 dark:text-white mt-1">{userProfile.name}</h2>
+                    <div className="flex flex-col items-center gap-2">
+                       <span className="bg-blue-500/10 text-blue-600 dark:text-blue-400 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border border-blue-500/20">Aura Verified ✅</span>
+                       <h2 className="text-3xl font-black text-slate-800 dark:text-white mt-2">أهلاً بك مرة أخرى، {userProfile.name}</h2>
+                       <p className="text-xs font-bold text-slate-400 dark:text-slate-500 mt-1 max-w-[200px] leading-relaxed mx-auto italic opacity-70 group-hover:opacity-100 transition-opacity">"نحن لا نبني عادات، نحن نبني شخصيات أعمق وأقوى."</p>
+                    </div>
                   </motion.div>
                 )}
 
@@ -1171,7 +1177,7 @@ export default function App() {
                     userLevel={userLevel} 
                     userTitle={userTitle} 
                     focusSessions={focusSessions || []} 
-                    dreamSessions={dreamSessions || []} 
+                    dreamSessions={dreamSessions} 
                   />
                 </Suspense>
               </motion.div>
@@ -1554,6 +1560,7 @@ export default function App() {
                     });
                   }}
                   onCelebrate={handleCelebrate}
+                  onTaskComplete={p => setPoints(prev => prev + p)}
                 />
               </Suspense>
             </motion.div>
@@ -1604,6 +1611,8 @@ export default function App() {
                   updateHabit={updateHabit}
                   focusSessions={focusSessions || []}
                   dreamSessions={dreamSessions || []}
+                  setFocusSessions={setFocusSessions}
+                  setDreamSessions={setDreamSessions}
                   requestConfirm={(title, description, icon, onConfirm) => {
                     if (!title) {
                       setConfirmAction(null);
@@ -1638,9 +1647,12 @@ export default function App() {
                   setFocusSessions={setFocusSessions}
                   dreamSessions={dreamSessions || []}
                   setDreamSessions={setDreamSessions}
-                  taskNotificationsEnabled={taskNotificationsEnabled}
-                  setTaskNotificationsEnabled={setTaskNotificationsEnabled}
                   onBack={() => setActiveTab('home')} 
+                  onCelebrate={handleCelebrate}
+                  globalRecoveryMode={globalRecoveryMode}
+                  setGlobalRecoveryMode={setGlobalRecoveryMode}
+                  userName={userProfile?.name?.split(' ')[0]}
+                  showFeedback={showFeedback}
                 />
               </Suspense>
             </motion.div>
@@ -1729,6 +1741,18 @@ export default function App() {
                     habit={habit} 
                     isCompletedToday={habit.completedDates.includes(selectedDate)}
                     onComplete={(note, type, recovery, q) => handleComplete(habit, note, type, recovery, q)}
+                    onUndo={() => {
+                      setConfirmAction({
+                        title: 'تراجع عن الإنجاز؟',
+                        description: 'هل أنت متأكد من التراجع عن تسجيل إنجاز هذه المهارة لليوم؟ سيتم خصم النقاط المسجلة.',
+                        icon: <Undo2 className="w-12 h-12 text-blue-500 mb-6 mx-auto" />,
+                        onConfirm: () => {
+                          undoHabitCompletion(habit.id);
+                          setConfirmAction(null);
+                          showFeedback('تم التراجع عن الإنجاز.', 'info');
+                        }
+                      });
+                    }}
                     onEdit={handleEdit}
                     onDelete={() => handleDelete(habit.id)}
                     onToggleRecovery={toggleHabitRecovery}

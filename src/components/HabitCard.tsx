@@ -8,6 +8,7 @@ interface HabitCardProps {
   habit: Habit;
   onComplete: (note?: string, type?: 'text' | 'voice', recovery?: boolean, questionnaire?: any) => void;
   isCompletedToday: boolean;
+  onUndo: () => void;
   onEdit: (habit: Habit) => void;
   onDelete: (id: string) => void;
   onToggleRecovery: (id: string) => void;
@@ -17,7 +18,7 @@ interface HabitCardProps {
   onCancelAlert?: () => void;
 }
 
-export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedToday, onEdit, onDelete, onToggleRecovery, onRelapse, isGlobalRecovery, onIconClick, onCancelAlert }) => {
+export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedToday, onUndo, onEdit, onDelete, onToggleRecovery, onRelapse, isGlobalRecovery, onIconClick, onCancelAlert }) => {
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [showRelapseInput, setShowRelapseInput] = useState(false);
   const [relapseReason, setRelapseReason] = useState('');
@@ -42,14 +43,14 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
   const [isRecording, setIsRecording] = useState(false);
 
   const handleQuickComplete = () => {
-    setShowNoteInput(true);
-    setStep(-1);
+    // True one-tap completion: assume expected level, no notes, no questions
+    onComplete(undefined, 'text', isRecovery || isGlobalRecovery, { ...qData, goalLevel: 'expected', isQuick: true });
+    setShowActionMenu(false);
   };
 
-  const recordImmediately = () => {
-    onComplete(undefined, 'text', isRecovery || isGlobalRecovery, { ...qData, isQuick: true });
-    setShowNoteInput(false);
-    setStep(0);
+  const handleDetailedStep = () => {
+    setShowNoteInput(true);
+    setStep(-1);
   };
 
   const handleComplete = (type: 'text' | 'voice' = 'text') => {
@@ -159,7 +160,7 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
             <button 
               onClick={() => onIconClick?.(habit.icon || 'CheckCircle2', habit.name)}
               className={`w-16 h-16 rounded-full mb-3 flex items-center justify-center transition-all duration-500 text-white shadow-xl ${
-              isCompletedToday ? 'bg-gradient-to-tr from-emerald-500 to-emerald-400 shadow-emerald-500/40 scale-105' : 'bg-gradient-to-tr from-blue-600 to-blue-500 shadow-blue-500/40 hover:scale-110 active:scale-95'
+              isCompletedToday ? 'bg-emerald-500 shadow-emerald-500/40 scale-105' : `${habit.color || 'bg-blue-600'} hover:scale-110 active:scale-95 shadow-md shadow-blue-500/20`
             }`}>
               {isCompletedToday ? <Check className="w-8 h-8 animate-[scale-in_0.5s_ease-out]" /> : <HabitIcon className="w-8 h-8" />}
             </button>
@@ -187,7 +188,7 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
                   transition={{ duration: 0.3, ease: "easeInOut", delay: 0.05 }}
                   className="absolute top-14 right-2 w-40 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl border border-slate-100 dark:border-slate-700 shadow-2xl rounded-3xl overflow-hidden z-50 text-right"
                 >
-                  <button onClick={() => { onEdit(habit); setShowManageMenu(false); }} className="w-full px-5 py-3.5 text-xs font-bold text-slate-700 hover:bg-blue-50 dark:text-slate-200 dark:hover:bg-slate-700 flex items-center justify-between transition-colors">
+                  <button onClick={() => { onEdit(habit); setShowManageMenu(false); }} className="w-full px-5 py-3.5 text-xs font-bold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 flex items-center justify-between transition-colors">
                     تعديل <Edit3 className="w-4 h-4 ml-2 opacity-50" />
                   </button>
                   {habit.enableReminders && onCancelAlert && (
@@ -195,7 +196,7 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
                       حذف التنبيه <LucideIcons.BellOff className="w-4 h-4 ml-2 opacity-50" />
                     </button>
                   )}
-                  <button onClick={() => { onDelete(habit.id); setShowManageMenu(false); }} className="w-full px-5 py-3.5 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-between border-t border-slate-100 dark:border-slate-700 transition-colors">
+                  <button onClick={() => { onDelete(habit.id); setShowManageMenu(false); }} className="w-full px-5 py-3.5 text-xs font-bold text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center justify-between border-t border-slate-100 dark:border-slate-700 transition-colors">
                     حذف <Trash2 className="w-4 h-4 ml-2 opacity-50" />
                   </button>
                 </motion.div>
@@ -210,9 +211,13 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
                  <ListOrdered className="w-5 h-5 group-hover/info:scale-125 transition-transform" />
                </button>
                {isCompletedToday ? (
-                 <div className="w-12 h-12 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-500 flex items-center justify-center animate-pulse border border-emerald-500/30">
-                   <Sparkles className="w-5 h-5" />
-                 </div>
+                 <button 
+                   onClick={onUndo}
+                   className="w-12 h-12 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-500 flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all border border-emerald-500/30 group/undo"
+                   title="تراجع عن الإنجاز"
+                 >
+                   <LucideIcons.RotateCcw className="w-5 h-5 group-hover/undo:rotate-[-90deg] transition-transform" />
+                 </button>
                ) : (
                  <button 
                    onClick={() => setShowActionMenu(true)}
@@ -237,13 +242,9 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
             >
               <h5 className="text-[10px] font-black text-slate-600 dark:text-slate-300 mb-6 uppercase tracking-[0.2em] bg-slate-100 dark:bg-slate-700 px-4 py-2 rounded-full shadow-sm">Initialize Interaction</h5>
               <div className="grid grid-cols-2 gap-3 w-full max-w-[210px]">
-                <button onClick={() => { setShowActionMenu(false); handleQuickComplete(); }} className="aspect-square bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group">
-                  <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">⚡</div>
-                  سريع
-                </button>
-                <button onClick={() => { setShowActionMenu(false); setShowNoteInput(true); setStep(0); }} className="aspect-square bg-slate-50 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group">
-                  <div className="w-8 h-8 rounded-full bg-slate-500/10 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">📝</div>
-                  مفصل
+                <button onClick={() => { setShowActionMenu(false); handleDetailedStep(); }} className="aspect-square bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group">
+                  <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">📝</div>
+                  تسجيل إنجاز
                 </button>
                 <button onClick={() => { setShowActionMenu(false); onToggleRecovery(habit.id); }} className="aspect-square bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group">
                   <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">🛡️</div>
@@ -252,6 +253,10 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
                 <button onClick={() => { setShowActionMenu(false); setShowRelapseInput(true); }} className="aspect-square bg-orange-50 dark:bg-orange-900/20 text-orange-500 dark:text-orange-400 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group">
                   <div className="w-8 h-8 rounded-full bg-orange-500/10 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">🍂</div>
                   وقعـت؟
+                </button>
+                <button onClick={() => { onEdit(habit); setShowActionMenu(false); }} className="aspect-square bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-black uppercase flex flex-col items-center justify-center gap-1 hover:scale-110 active:scale-90 transition-all shadow-sm group">
+                  <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-xl group-hover:rotate-12 transition-transform">⚙️</div>
+                  تعديل
                 </button>
               </div>
               <button 
@@ -374,13 +379,13 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
                       <div className="flex gap-3 pt-4 mb-10">
                          <button 
                            onClick={() => { setShowDetails(false); onEdit(habit); }}
-                           className="flex-1 h-14 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-white rounded-full font-black text-xs uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all shadow-sm"
+                           className="flex-1 h-14 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full font-black text-xs uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all shadow-sm border border-blue-100 dark:border-blue-800"
                          >
                            تعديل
                          </button>
                          <button 
                            onClick={() => { setShowDetails(false); onDelete(habit.id); }}
-                           className="flex-1 h-14 bg-red-50 dark:bg-red-900/10 text-red-500 rounded-full font-black text-xs uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all border border-red-100 dark:border-red-900/20"
+                           className="flex-1 h-14 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full font-black text-xs uppercase tracking-widest hover:bg-blue-500 hover:text-white transition-all border border-blue-100 dark:border-blue-800"
                          >
                            حذف
                          </button>
@@ -429,13 +434,13 @@ export const HabitCard = memo<HabitCardProps>(({ habit, onComplete, isCompletedT
                   <div className="space-y-6">
                     <h4 className="text-xl font-black text-slate-800 dark:text-white mb-6 text-center">وصلت لفين؟</h4>
                     <div className="flex flex-col gap-3">
-                       <button onClick={() => { setQData({...qData, goalLevel: 'exceeded'}); recordImmediately(); }} className="py-4 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full text-xs font-black uppercase flex items-center justify-center gap-2 border border-emerald-100 dark:border-emerald-800 active:scale-95 transition-transform">
+                       <button onClick={() => { onComplete(undefined, 'text', isRecovery || isGlobalRecovery, { ...qData, goalLevel: 'exceeded', isQuick: true }); setShowNoteInput(false); }} className="py-4 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full text-xs font-black uppercase flex items-center justify-center gap-2 border border-emerald-100 dark:border-emerald-800 active:scale-95 transition-transform">
                          تخطيته <span className="text-lg">🔥</span> 
                        </button>
-                       <button onClick={() => { setQData({...qData, goalLevel: 'expected'}); recordImmediately(); }} className="py-4 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-xs font-black uppercase flex items-center justify-center gap-2 border-2 border-blue-200 dark:border-blue-800 active:scale-95 transition-transform">
+                       <button onClick={() => { onComplete(undefined, 'text', isRecovery || isGlobalRecovery, { ...qData, goalLevel: 'expected', isQuick: true }); setShowNoteInput(false); }} className="py-4 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-xs font-black uppercase flex items-center justify-center gap-2 border-2 border-blue-200 dark:border-blue-800 active:scale-95 transition-transform">
                          المتوقع <span className="text-lg">🎯</span> 
                        </button>
-                       <button onClick={() => { setQData({...qData, goalLevel: 'min'}); recordImmediately(); }} className="py-4 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-full text-xs font-black uppercase flex items-center justify-center gap-2 border border-orange-100 dark:border-orange-800 active:scale-95 transition-transform">
+                       <button onClick={() => { onComplete(undefined, 'text', isRecovery || isGlobalRecovery, { ...qData, goalLevel: 'min', isQuick: true }); setShowNoteInput(false); }} className="py-4 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-full text-xs font-black uppercase flex items-center justify-center gap-2 border border-orange-100 dark:border-orange-800 active:scale-95 transition-transform">
                          الأدنى <span className="text-lg">🐌</span> 
                        </button>
                     </div>

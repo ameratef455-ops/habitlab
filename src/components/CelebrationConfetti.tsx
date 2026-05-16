@@ -12,13 +12,14 @@ interface Particle {
   vy: number;
 }
 
-export const CelebrationConfetti: React.FC<{ active: boolean; onComplete: () => void }> = ({ active, onComplete }) => {
+export const CelebrationConfetti: React.FC<{ active: boolean; intensity?: 'low' | 'medium' | 'high'; onComplete: () => void }> = ({ active, intensity = 'medium', onComplete }) => {
   const [particles, setParticles] = useState<Particle[]>([]);
   const colors = ['#6366f1', '#a855f7', '#ec4899', '#f59e0b', '#10b981'];
 
   useEffect(() => {
     if (active) {
-      const newParticles = Array.from({ length: 80 }).map((_, i) => ({
+      const particleCount = intensity === 'low' ? 30 : intensity === 'high' ? 150 : 80;
+      const newParticles = Array.from({ length: particleCount }).map((_, i) => ({
         id: i,
         x: 50,
         y: 50,

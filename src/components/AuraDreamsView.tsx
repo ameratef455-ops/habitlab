@@ -10,7 +10,8 @@ import {
   CheckCircle2, 
   HelpCircle,
   Save,
-  MessageCircle
+  MessageCircle,
+  Plus
 } from 'lucide-react';
 
 interface AuraDreamsViewProps {
@@ -23,11 +24,32 @@ export const AuraDreamsView: React.FC<AuraDreamsViewProps> = ({ onBack, onSaveSe
   const [isDrawing, setIsDrawing] = useState(false);
   const [elements, setElements] = useState<any[]>([]);
   const [tool, setTool] = useState<'pencil' | 'eraser'>('pencil');
+  
+  const undo = () => {
+    if (elements.length === 0) return;
+    setElements(prev => prev.slice(0, -1));
+  };
   const [color, setColor] = useState('#3b82f6');
   const [startTime] = useState(Date.now());
   const [showReflection, setShowReflection] = useState(false);
   const [reflection, setReflection] = useState('');
-  const [notes, setNotes] = useState('');
+  const [notesList, setNotesList] = useState<{id: string, text: string}[]>([]);
+  const [currentNote, setCurrentNote] = useState('');
+  const [showNotesDrawer, setShowNotesDrawer] = useState(false);
+
+  const handleAddNote = () => {
+    if (!currentNote.trim()) return;
+    setNotesList([{ id: crypto.randomUUID(), text: currentNote }, ...notesList]);
+    setCurrentNote('');
+  };
+
+  const handleEditNote = (id: string, newText: string) => {
+    setNotesList(notesList.map(n => n.id === id ? { ...n, text: newText } : n));
+  };
+
+  const handleDeleteNote = (id: string) => {
+    setNotesList(notesList.filter(n => n.id !== id));
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -122,13 +144,17 @@ export const AuraDreamsView: React.FC<AuraDreamsViewProps> = ({ onBack, onSaveSe
 
   const saveAndExit = () => {
     const durationMinutes = Math.round((Date.now() - startTime) / 60000);
+    const canvas = canvasRef.current;
+    const canvasImage = canvas ? canvas.toDataURL('image/png') : undefined;
+
     const session = {
       id: crypto.randomUUID(),
       type: 'dreams',
       durationMinutes,
       timestamp: new Date().toISOString(),
       reflection,
-      notes,
+      notes: notesList.map(n => n.text).join('\n---\n') + (currentNote.trim() ? `\n---\n${currentNote}` : ''),
+      canvasImage,
       points: Math.min(durationMinutes * 5, 100) // Max 100 points for drawing
     };
     onSaveSession(session);
@@ -166,20 +192,41 @@ export const AuraDreamsView: React.FC<AuraDreamsViewProps> = ({ onBack, onSaveSe
         />
 
         {/* Toolbar */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white dark:bg-slate-900 p-2 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800">
-          <button 
-            onClick={() => setTool('pencil')}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${tool === 'pencil' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20 scale-110' : 'text-slate-400 hover:bg-slate-50'}`}
-          >
-            <Pencil className="w-5 h-5" />
-          </button>
-          <button 
-            onClick={() => setTool('eraser')}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${tool === 'eraser' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20 scale-110' : 'text-slate-400 hover:bg-slate-50'}`}
-          >
-            <Eraser className="w-5 h-5" />
-          </button>
-          <div className="w-px h-8 bg-slate-100 dark:bg-slate-800 mx-1" />
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white dark:bg-slate-900 p-3 rounded-[2.5rem] shadow-2xl border border-slate-100 dark:border-slate-800">
+          <div className="flex flex-col items-center gap-1">
+            <button 
+              onClick={() => setTool('pencil')}
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${tool === 'pencil' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20 scale-110' : 'text-slate-400 hover:bg-slate-50'}`}
+            >
+              <Pencil className="w-5 h-5" />
+            </button>
+            <span className="text-[8px] font-black uppercase text-slate-400">قلم</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-1">
+            <button 
+              onClick={() => setTool('eraser')}
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${tool === 'eraser' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20 scale-110' : 'text-slate-400 hover:bg-slate-50'}`}
+            >
+              <Eraser className="w-5 h-5" />
+            </button>
+            <span className="text-[8px] font-black uppercase text-slate-400">ممحاة</span>
+          </div>
+
+          <div className="w-px h-10 bg-slate-100 dark:bg-slate-800 mx-1" />
+          
+          <div className="flex flex-col items-center gap-1">
+            <button 
+              onClick={undo}
+              className="w-12 h-12 rounded-2xl flex items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-all"
+            >
+              <RotateCcw className="w-5 h-5" />
+            </button>
+            <span className="text-[8px] font-black uppercase text-slate-400">تراجع</span>
+          </div>
+
+          <div className="w-px h-10 bg-slate-100 dark:bg-slate-800 mx-1" />
+
           {['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'].map(c => (
             <button 
               key={c}
@@ -188,32 +235,71 @@ export const AuraDreamsView: React.FC<AuraDreamsViewProps> = ({ onBack, onSaveSe
               style={{ backgroundColor: c }}
             />
           ))}
-          <div className="w-px h-8 bg-slate-100 dark:bg-slate-800 mx-1" />
-          <button onClick={clearCanvas} className="w-12 h-12 rounded-2xl flex items-center justify-center text-red-400 hover:bg-red-50">
-            <Trash2 className="w-5 h-5" />
-          </button>
+          
+          <div className="w-px h-10 bg-slate-100 dark:bg-slate-800 mx-1" />
+          
+          <div className="flex flex-col items-center gap-1">
+            <button onClick={clearCanvas} className="w-12 h-12 rounded-2xl flex items-center justify-center text-blue-500 hover:bg-blue-50 transition-all">
+              <Trash2 className="w-5 h-5" />
+            </button>
+            <span className="text-[8px] font-black uppercase text-slate-400">مسح الكل</span>
+          </div>
         </div>
       </div>
 
       {/* Notes Section Overlay */}
-      <div className="p-8 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-900">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-4">
+      <div className="p-8 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+        <div className="max-w-3xl mx-auto">
+          <div className="flex items-center justify-between mb-8">
              <button 
               onClick={handleFinish}
-              className="px-8 py-3 bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:scale-105 transition-transform"
+              className="px-10 py-5 bg-emerald-500 text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-emerald-500/30 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
              >
+              <CheckCircle2 className="w-5 h-5" />
               إرسال وتحليل الجلسة
              </button>
-             <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">محرر الخواطر ✍️</h3>
+             <div className="text-right">
+                <h3 className="text-xl font-black text-slate-800 dark:text-white">سجل الخواطر ✍️</h3>
+                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mt-1">Flow of thoughts</p>
+             </div>
           </div>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="دَوّن هنا أي أفكار أو مشاعر طرأت على ذهنك أثناء الرسم..."
-            className="w-full h-32 bg-slate-50 dark:bg-slate-900/50 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 focus:border-blue-500 outline-none text-right font-sans text-sm resize-none"
-            dir="rtl"
-          />
+
+          <div className="space-y-6">
+            <div className="flex flex-col gap-4 max-h-[300px] overflow-y-auto w-full pr-2 no-scrollbar">
+              <AnimatePresence>
+                {notesList.map(n => (
+                  <motion.div key={n.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.8 }} className="group relative bg-white dark:bg-slate-800 p-6 rounded-[2.5rem] border border-slate-100 dark:border-slate-700 shadow-sm transition-shadow hover:shadow-md">
+                    <textarea 
+                      value={n.text}
+                      onChange={(e) => handleEditNote(n.id, e.target.value)}
+                      className="bg-transparent border-none outline-none resize-none w-full text-sm font-bold text-slate-700 dark:text-slate-200 min-h-[60px]"
+                      dir="rtl"
+                      placeholder="..."
+                    />
+                    <button onClick={() => handleDeleteNote(n.id)} className="absolute top-4 left-4 w-9 h-9 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-blue-600 hover:text-white">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+
+            <div className="p-2 bg-white dark:bg-slate-800 rounded-[3rem] border border-slate-100 dark:border-slate-700 shadow-xl focus-within:ring-4 ring-emerald-500/10 transition-all">
+                <div className="flex items-end gap-2 p-1">
+                  <textarea
+                    value={currentNote}
+                    onChange={(e) => setCurrentNote(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddNote(); } }}
+                    placeholder="اكتب هنا أي فكرة أو صورة طرأت على ذهنك... (Enter للحفظ)"
+                    className="flex-1 min-h-[100px] p-5 bg-slate-50 dark:bg-slate-900/50 rounded-[2.5rem] border-none outline-none text-right font-sans text-sm resize-none text-slate-800 dark:text-slate-100"
+                    dir="rtl"
+                  />
+                  <button onClick={handleAddNote} className="w-16 h-16 rounded-[2rem] bg-emerald-500 text-white flex items-center justify-center shadow-lg hover:bg-emerald-600 transition-all active:scale-95 flex-shrink-0 group">
+                    <Plus className="w-8 h-8 group-hover:rotate-90 transition-transform" />
+                  </button>
+                </div>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -123,6 +123,48 @@ export function useHabitLab() {
     setHabits(prev => prev.map(h => h.id === id ? { ...h, isRecoveryModeEnabled: !h.isRecoveryModeEnabled } : h));
   };
 
+  const undoHabitCompletion = (habitId: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit || !habit.completedDates.includes(today)) return;
+
+    // Find the note/data for today's completion to calculate points to deduct
+    // Note: This is a simplification. Ideally we'd store how many points were earned for each specific completion date.
+    // Given the current architecture, we'll try to find the last note from today or assume a base value if not found.
+    const todayNoteIdx = [...habit.notes].reverse().findIndex(n => n.date === today);
+    let pointsToDeduct = (habit.isRecoveryModeEnabled || globalRecoveryMode) ? 20 : 10; // Default base
+
+    if (todayNoteIdx !== -1) {
+      const actualIdx = habit.notes.length - 1 - todayNoteIdx;
+      const note = habit.notes[actualIdx];
+      // Try to reconstruct points earned
+      let actionPoints = note.isQuick ? HABIT_SCORING_MAP.QUICK_LOG : HABIT_SCORING_MAP.NORMAL_COMMITMENT;
+      let timingPoints = (note.onTime || note.onExpectedTime) ? 10 : 0;
+      let overExpectedPoints = (note.goalLevel === 'exceeded') ? 30 : 0;
+      pointsToDeduct = (actionPoints + timingPoints + overExpectedPoints) * (note.recovery ? 2 : 1);
+    }
+
+    setHabits(prev => prev.map(h => {
+      if (h.id === habitId) {
+        return {
+          ...h,
+          streak: Math.max(0, h.streak - 1),
+          completedDates: h.completedDates.filter(d => d !== today),
+          notes: h.notes.filter(n => n.date !== today)
+        };
+      }
+      return h;
+    }));
+
+    setPoints(p => Math.max(0, p - pointsToDeduct));
+    
+    // Also update weekly challenge progress
+    setWeeklyChallenge(wp => {
+      if (!wp) return null;
+      return { ...wp, progress: Math.max(0, wp.progress - pointsToDeduct) };
+    });
+  };
+
   const revertLastCompletion = () => {
     if (!lastCompletion) return;
 
@@ -304,6 +346,7 @@ export function useHabitLab() {
     habits, 
     weeklyChallenge,
     points,
+    setPoints,
     scheduleTasks,
     setScheduleTasks,
     plannerData,
@@ -322,6 +365,7 @@ export function useHabitLab() {
     deleteHabit,
     toggleHabitRecovery,
     completeHabit, 
+    undoHabitCompletion,
     revertLastCompletion,
     todayIsHoliday,
     setTodayIsHoliday,
